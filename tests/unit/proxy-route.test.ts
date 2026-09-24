@@ -155,7 +155,10 @@ describe("BFF proxy", () => {
     await signIn();
     // ASP.NET answers an unauthenticated API call with 302 to /Account/Login.
     const redirected = new Response(null, { status: 302, headers: { location: "/Account/Login" } });
-    callUpstream.mockResolvedValueOnce(redirected).mockResolvedValueOnce(new Response(null, { status: 302 }));
+    callUpstream
+      .mockResolvedValueOnce(redirected)
+      .mockResolvedValueOnce(new Response(null, { status: 302 }))
+      .mockResolvedValueOnce(new Response(null, { status: 302 }));
     const res = await call("GET", "transactions");
     expect(res.status).toBe(401);
     expect((await res.json()).message).toMatch(/session has expired/i);
@@ -166,9 +169,10 @@ describe("BFF proxy", () => {
     await signIn();
     callUpstream
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockResolvedValueOnce(json({ message: "expired" }, 401));
     expect((await call("GET", "transactions")).status).toBe(401);
-    expect((callUpstream.mock.calls[1][0] as { path: string }).path).toBe("payments/get-all-banks");
+    expect((callUpstream.mock.calls[2][0] as { path: string }).path).toBe("payments/get-all-banks");
     expect(cookieJar.has("afk_session")).toBe(false);
   });
 
@@ -176,18 +180,22 @@ describe("BFF proxy", () => {
     await signInAsAdmin();
     callUpstream
       .mockResolvedValueOnce(json({ message: "no tenant context" }, 401))
+      .mockResolvedValueOnce(json({ message: "no tenant context" }, 401))
       .mockResolvedValueOnce(json({ statusCode: 0, data: [] }));
     const res = await call("GET", "admin/refunds");
     expect(res.status).toBe(403);
-    expect((callUpstream.mock.calls[1][0] as { path: string }).path).toBe("admin/tenants");
+    expect((callUpstream.mock.calls[2][0] as { path: string }).path).toBe("admin/tenants");
     expect(cookieJar.has("afk_session")).toBe(true);
   });
 
   it("does not probe when the probe endpoint itself is the one refusing", async () => {
     await signInAsAdmin();
-    callUpstream.mockResolvedValueOnce(json({ message: "expired" }, 401));
+    callUpstream
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ message: "expired" }, 401));
     expect((await call("GET", "admin/tenants")).status).toBe(401);
-    expect(callUpstream).toHaveBeenCalledTimes(1);
+    // Retried once, then judged without a probe: it is the probe route itself.
+    expect(callUpstream).toHaveBeenCalledTimes(2);
     expect(cookieJar.has("afk_session")).toBe(false);
   });
 
@@ -267,5 +275,67 @@ describe("BFF proxy", () => {
       headers: { "x-csrf-token": CSRF },
     });
     expect(res.status).toBe(413);
+  });
+});
+
+/**
+ * Seen in production: the gateway answered `payments/collection-balance` with
+ * 401 while `payments/disbursement-balance` returned 200 on the same token
+ * seconds earlier. Nothing about that means the session ended, and treating it
+ * as a sign-out threw a working merchant out of the dashboard.
+ */
+describe("not mistaking a bad moment for a dead session", () => {
+  it("retries a safe call once, and carries on when the second try works", async () => {
+    await signIn();
+    callUpstream
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ statusCode: 0, data: { availableBalance: 5 } }));
+
+    const res = await call("GET", "payments/collection-balance");
+
+    expect(res.status).toBe(200);
+    expect(callUpstream).toHaveBeenCalledTimes(2);
+    expect(cookieJar.has("afk_session")).toBe(true);
+  });
+
+  it("never repeats a call that moves money", async () => {
+    await signIn();
+    callUpstream
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ statusCode: 0, data: [] }));
+
+    await call("POST", "payments/collection", { headers: { "x-csrf-token": CSRF }, body: { amount: 1 } });
+
+    // One attempt, then the probe. The payment is never sent twice.
+    expect(callUpstream).toHaveBeenCalledTimes(2);
+    expect((callUpstream.mock.calls[1][0] as { path: string }).path).toBe("payments/get-all-banks");
+  });
+
+  it("keeps the session when the probe cannot be reached at all", async () => {
+    await signIn();
+    callUpstream
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockResolvedValueOnce(json({ message: "expired" }, 401))
+      .mockRejectedValueOnce(new Error("fetch failed"));
+
+    const res = await call("GET", "payments/collection-balance");
+
+    expect(res.status).toBe(403);
+    expect(cookieJar.has("afk_session")).toBe(true);
+  });
+
+  it("keeps the session when the probe is rate limited or erroring", async () => {
+    for (const status of [429, 500]) {
+      await signIn();
+      callUpstream
+        .mockResolvedValueOnce(json({ message: "expired" }, 401))
+        .mockResolvedValueOnce(json({ message: "expired" }, 401))
+        .mockResolvedValueOnce(json({ message: "slow down" }, status));
+
+      const res = await call("GET", "payments/collection-balance");
+
+      expect(res.status).toBe(403);
+      expect(cookieJar.has("afk_session")).toBe(true);
+    }
   });
 });

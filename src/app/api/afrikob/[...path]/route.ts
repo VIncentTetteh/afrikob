@@ -33,6 +33,12 @@ const PROBE_PATH: Record<SessionData["role"], string> = {
 /**
  * A 401 can mean the session died, or just that this endpoint refuses this
  * caller. Before signing anyone out mid-task, check the session itself.
+ *
+ * Only an outright rejection of the probe proves the credential is gone.
+ * Anything else — a refusal on that one route, a rate limit, a gateway error,
+ * a connection that never completed — says nothing about the session, so it
+ * counts as alive. Signing someone out on that evidence loses their work for
+ * no reason; if the session really has ended, the next call says so anyway.
  */
 async function sessionStillAlive(session: SessionData, failedPath: string): Promise<boolean> {
   const probePath = PROBE_PATH[session.role];
@@ -45,9 +51,9 @@ async function sessionStillAlive(session: SessionData, failedPath: string): Prom
       headers: authHeaders(session),
     });
     await res.body?.cancel();
-    return res.ok;
+    return !isUnauthenticated(res.status);
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -97,14 +103,24 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
   }
 
   try {
-    const upstream = await callUpstream({
-      env: session.env,
-      method,
-      path,
-      search: request.nextUrl.search,
-      headers,
-      body,
-    });
+    const send = () =>
+      callUpstream({
+        env: session.env,
+        method,
+        path,
+        search: request.nextUrl.search,
+        headers,
+        body,
+      });
+
+    let upstream = await send();
+    // The gateway sometimes answers one read with 401 while the very next call
+    // on the same credential succeeds. A single retry of a safe request costs
+    // little and spares a working session; unsafe methods are never repeated.
+    if (isUnauthenticated(upstream.status) && SAFE_METHODS.has(method)) {
+      await upstream.body?.cancel();
+      upstream = await send();
+    }
     logger.info("proxy", {
       requestId,
       method,
