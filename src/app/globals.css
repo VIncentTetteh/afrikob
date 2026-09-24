@@ -1,26 +1,168 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Ledger: a money-movement console. Neutral ground, one accent for actions,
+   direction (in/out) and state carried by dedicated hues. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #141a22;
+  --ink-soft: #5a6472;
+  --ink-faint: #8a93a1;
+  --ground: #f2f3f5;
+  --paper: #ffffff;
+  --line: #e2e5ea;
+  --line-strong: #cbd1da;
+  --field: #f6f7f9;
+
+  --accent: #ee8434;
+  --accent-hover: #d9701f;
+  --accent-ink: #ffffff;
+  --accent-wash: #fdf0e3;
+
+  --in: #0f6e6a;
+  --in-wash: #e4f1f0;
+  --out: #4340a8;
+  --out-wash: #e9e9f7;
+
+  --settled: #12724c;
+  --settled-wash: #e5f2eb;
+  --pending: #9a6700;
+  --pending-wash: #fbf1dc;
+  --failed: #b3261e;
+  --failed-wash: #fbeae9;
+
+  --chart-1: #d9701f;
+  --chart-grid: #e2e5ea;
+  --shadow-sheet: 0 24px 60px -24px rgb(20 26 34 / 0.35);
+
+  /* Always-dark surface: brand panels and code blocks keep it in both themes. */
+  --pitch: #12161c;
+  --pitch-ink: #eef1f4;
+  --pitch-soft: #9aa5b4;
+}
+
+.dark {
+  --ink: #e8eaed;
+  --ink-soft: #99a2b0;
+  --ink-faint: #6c7686;
+  --ground: #0f1216;
+  --paper: #171c22;
+  --line: #262d36;
+  --line-strong: #39424e;
+  --field: #1d232b;
+
+  --accent: #f0924a;
+  --accent-hover: #f5a263;
+  --accent-ink: #1a1207;
+  --accent-wash: #33210f;
+
+  --in: #3fa9a3;
+  --in-wash: #10292a;
+  --out: #8e8be0;
+  --out-wash: #1d1c35;
+
+  --settled: #4cc38a;
+  --settled-wash: #10291e;
+  --pending: #e0b155;
+  --pending-wash: #2e2410;
+  --failed: #f2776b;
+  --failed-wash: #331614;
+
+  --chart-1: #d0722a;
+  --chart-grid: #262d36;
+  --pitch: #0c1014;
+  --shadow-sheet: 0 24px 60px -24px rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-ground: var(--ground);
+  --color-paper: var(--paper);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-field: var(--field);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-in: var(--in);
+  --color-in-wash: var(--in-wash);
+  --color-out: var(--out);
+  --color-out-wash: var(--out-wash);
+  --color-settled: var(--settled);
+  --color-settled-wash: var(--settled-wash);
+  --color-pending: var(--pending);
+  --color-pending-wash: var(--pending-wash);
+  --color-failed: var(--failed);
+  --color-failed-wash: var(--failed-wash);
+  --color-chart-1: var(--chart-1);
+  --color-pitch: var(--pitch);
+  --color-pitch-ink: var(--pitch-ink);
+  --color-pitch-soft: var(--pitch-soft);
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-public-sans), ui-sans-serif, sans-serif;
+  --radius-panel: 0.875rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+*,
+*::before,
+*::after {
+  border-color: var(--line);
+}
+
+html,
+body {
+  background: var(--ground);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Figures: the largest type on any screen, set tight and aligned. */
+.figure {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* One-time flash when a record posts or updates in place. */
+@keyframes post-flash {
+  from {
+    background-color: var(--accent-wash);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.post-flash {
+  animation: post-flash 1.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

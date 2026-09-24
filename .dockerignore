@@ -1,0 +1,10 @@
+node_modules
+.next
+.next-e2e
+.next-verify
+.env*
+!.env.example
+coverage
+test-results
+playwright-report
+.git

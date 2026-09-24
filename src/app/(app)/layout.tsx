@@ -1,0 +1,44 @@
+"use client";
+
+import { Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
+import { CommandBar } from "@/components/layout/command-bar";
+import { Rail, TabBar } from "@/components/layout/rail";
+import { useSession } from "@/lib/api/session";
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+  const { data: session, isError } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isError) router.replace("/signin?reason=expired");
+  }, [isError, router]);
+
+  if (!session) {
+    return (
+      <div className="grid min-h-dvh place-items-center" role="status">
+        <Loader2 className="size-7 animate-spin text-accent" aria-label="Loading" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-dvh">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-paper focus:p-3"
+      >
+        Skip to content
+      </a>
+      <Rail session={session} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <CommandBar session={session} />
+        <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-7">
+          {children}
+        </main>
+        <TabBar session={session} />
+      </div>
+    </div>
+  );
+}
