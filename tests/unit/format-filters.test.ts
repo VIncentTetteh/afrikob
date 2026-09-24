@@ -62,7 +62,7 @@ describe("transaction filters", () => {
 
 describe("nav", () => {
   it("uses longest-prefix matching per role", () => {
-    const tenant = navFor("tenant");
+    const tenant = navFor("tenant", "apikey");
     expect(activeHref("/disbursements/bulk/abc", tenant)).toBe("/disbursements/bulk");
     expect(activeHref("/status-check", tenant)).toBe("/status-check");
     expect(activeHref("/disbursements", tenant)).toBe("/disbursements");
@@ -88,6 +88,16 @@ describe("nav", () => {
     }
   });
 
+  it("only offers money screens to an API-key session", () => {
+    // A password session is refused by the gateway on every money endpoint.
+    expect(navFor("tenant", "apikey").length).toBeGreaterThan(0);
+    expect(navFor("tenant", "portal")).toEqual([]);
+    const tenantAdmin = navFor("tenant-admin", "portal").flatMap((s) => s.items.map((i) => i.href));
+    expect(tenantAdmin.every((href) => href.startsWith("/tenant-admin"))).toBe(true);
+    expect(homeFor("tenant", "portal")).toBe("/no-access");
+    expect(homeFor("tenant", "apikey")).toBe("/dashboard");
+  });
+
   it("sends each role to an approvals inbox it can actually open", () => {
     expect(approvalsHrefFor("platform")).toBe("/admin/approvals");
     expect(approvalsHrefFor("tenant-admin")).toBe("/tenant-admin/approvals");
@@ -100,17 +110,16 @@ describe("nav", () => {
     expect(homeFor("platform")).toBe("/admin");
     expect(homeFor("tenant-admin")).toBe("/tenant-admin");
     expect(homeFor("tenant")).toBe("/dashboard");
-    // Each role's home is a destination in its own navigation.
-    for (const role of ["platform", "tenant-admin", "tenant"] as const) {
-      const hrefs = navFor(role).flatMap((s) => s.items.map((i) => i.href));
-      expect(hrefs).toContain(homeFor(role));
+    // Each session's home is a destination in its own navigation.
+    for (const [role, mode] of [["platform", "portal"], ["tenant-admin", "portal"], ["tenant", "apikey"]] as const) {
+      const hrefs = navFor(role, mode).flatMap((s) => s.items.map((i) => i.href));
+      expect(hrefs).toContain(homeFor(role, mode));
     }
   });
 
-  it("lets a tenant admin run the business and move money", () => {
-    const hrefs = navFor("tenant-admin").flatMap((s) => s.items.map((i) => i.href));
-    expect(hrefs).toEqual(expect.arrayContaining(["/dashboard", "/collections", "/tenant-admin", "/tenant-admin/approvals", "/tenant-admin/people"]));
-    // Running the platform is not theirs.
+  it("gives a tenant admin their own business, not the platform", () => {
+    const hrefs = navFor("tenant-admin", "portal").flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs).toEqual(expect.arrayContaining(["/tenant-admin", "/tenant-admin/approvals", "/tenant-admin/people"]));
     expect(hrefs.every((href) => !href.startsWith("/admin"))).toBe(true);
   });
 });

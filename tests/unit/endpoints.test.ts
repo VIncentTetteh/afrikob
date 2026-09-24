@@ -47,7 +47,7 @@ const filter = { tenantId: "ten-1", fromDate: "2026-09-01", toDate: "2026-09-30"
 const PERSON = {
   email: "a@b.com",
   displayName: "A",
-  userType: "Admin",
+  userType: "Platform" as const,
   tenantId: undefined,
   password: "password1",
   canMake: true,
@@ -91,7 +91,7 @@ const cases: [string, () => Promise<unknown>, string, string, string?][] = [
   ["listFees", () => adminApi.listFees("t1"), "GET", "admin/tenants/t1/fees"],
   ["upsertFee", () => adminApi.upsertFee("t1", { transactionType: "X", percentageFee: 1 }), "POST", "admin/tenants/t1/fees"],
   ["deleteFee", () => adminApi.deleteFee("t1", "BULK/X"), "DELETE", "admin/tenants/t1/fees/BULK%2FX"],
-  ["listUsers", () => adminApi.listUsers({ tenantId: "t1", userType: "Admin" }), "GET", "admin/users", "?tenantId=t1&userType=Admin"],
+  ["listUsers", () => adminApi.listUsers({ tenantId: "t1", userType: "Tenant" }), "GET", "admin/users", "?tenantId=t1&userType=Tenant"],
   ["getUser", () => adminApi.getUser("u1"), "GET", "admin/users/u1"],
   ["createUser", () => adminApi.createUser(PERSON), "POST", "admin/users"],
   ["updateUser", () => adminApi.updateUser("u1", PERSON_EDIT), "PATCH", "admin/users/u1"],

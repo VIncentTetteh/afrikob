@@ -12,6 +12,9 @@ const LOGIN_CODE = "654321";
 const publicUser = ({ password: _password, ...user }) => user;
 
 function createUser(body, tenantId) {
+  if (body.userType && !["Platform", "Tenant"].includes(body.userType)) {
+    return [400, problem("Bad Request", "UserType must be 'Platform' or 'Tenant'.")];
+  }
   if (state.users.some((u) => u.email === body.email)) return [409, problem("Conflict", "That email already has an account.")];
   const user = {
     id: `usr-${state.users.length + 1}`,
@@ -61,7 +64,7 @@ const initialState = () => ({
       email: "ops@afrikob.com",
       password: "correct-horse",
       displayName: "Doris Bosompem",
-      userType: "Admin",
+      userType: "Platform",
       tenantId: null,
       canMake: true,
       canCheck: true,
@@ -78,7 +81,7 @@ const initialState = () => ({
       email: "owner@afikob.com",
       password: "tenant-horse",
       displayName: "Kwame Owner",
-      userType: "TenantAdmin",
+      userType: "Tenant",
       tenantId: "ten-1",
       canMake: true,
       canCheck: true,
@@ -89,6 +92,23 @@ const initialState = () => ({
       isActive: true,
       lastLoginAt: null,
       createdAt: "2026-02-02T08:00:00Z",
+    },
+    {
+      id: "usr-3",
+      email: "clerk@afikob.com",
+      password: "tenant-clerk",
+      displayName: "Ama Clerk",
+      userType: "Tenant",
+      tenantId: "ten-1",
+      canMake: true,
+      canCheck: false,
+      isTenantAdmin: false,
+      isPlatformAdmin: false,
+      phoneNumber: null,
+      preferredNotificationChannel: "SMS",
+      isActive: true,
+      lastLoginAt: null,
+      createdAt: "2026-03-02T08:00:00Z",
     },
   ],
   approvals: [
@@ -374,7 +394,7 @@ const routes = [
   // A tenant's own administration
   ["GET", /^tenant-admin\/tenant$/, () => [200, ok(state.tenantDetail)]],
   ["GET", /^tenant-admin\/users$/, () => [200, ok(state.users.filter((u) => u.tenantId === "ten-1").map(publicUser))]],
-  ["POST", /^tenant-admin\/users$/, (_r, _m, body) => createUser({ ...body, userType: "TenantUser" }, "ten-1")],
+  ["POST", /^tenant-admin\/users$/, (_r, _m, body) => createUser({ ...body, userType: "Tenant" }, "ten-1")],
   ["GET", /^tenant-admin\/users\/([^/]+)$/, (_r, m) => {
     const user = state.users.find((u) => u.id === m[1] && u.tenantId === "ten-1");
     return user ? [200, ok(publicUser(user))] : [404, problem("Not Found", "No such user.")];
@@ -429,7 +449,14 @@ const routes = [
     const found = state.approvals.find((a) => a.id === m[1]);
     return found ? [200, ok(found)] : [404, problem("Not Found", "No such request.")];
   }],
-  ["POST", /^tenant-admin\/approvals\/([^/]+)\/decide$/, (_r, m, body) => decide(m[1], body)],
+  ["POST", /^tenant-admin\/approvals\/([^/]+)\/decide$/, (_r, m, body) => {
+    const request = state.approvals.find((a) => a.id === m[1]);
+    // Live behaviour: a tenant admin may not decide a wallet top-up.
+    if (request?.actionKey === "WALLET_TOPUP") {
+      return [400, problem("Bad Request", "Wallet top-up requests can only be approved by a Platform Admin.")];
+    }
+    return decide(m[1], body);
+  }],
   ["GET", /^admin\/reports\/collections\/list$/, () => [200, ok(state.transactions.map(toReportRow))],],
   ["GET", /^admin\/reports\/disbursements\/list$/, () => [200, ok([])]],
   // Transactions & payments
@@ -527,6 +554,10 @@ http
       if (!who) return send(res, 403, fail("Access denied"));
       if (path.startsWith("admin/") && who.role !== "admin") return send(res, 403, fail("Access denied"));
       if (path.startsWith("tenant-admin/") && !who.isTenantAdmin) return send(res, 403, fail("Access denied"));
+      // The live gateway answers 401 on money for a portal session: only the
+      // bearer token minted from an API key carries tenant context.
+      const money = path.startsWith("payments/") || path.startsWith("transactions");
+      if (money && who.kind !== "apikey") return send(res, 401, fail("Unauthorized"));
     }
     const body = await readBody(req).catch(() => ({}));
     const [status, payload, headers] = route[2](req, path.match(route[1]), body, url);

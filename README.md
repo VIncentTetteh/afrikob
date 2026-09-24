@@ -33,7 +33,7 @@ The gateway rejects cross-origin browser calls, so **the browser never calls it 
 
 ### Roles
 
-`platform` (no tenant), `tenant-admin` (a tenant's administrator) and `tenant` (an ordinary tenant user or an API key). The login response carries no admin flag, so a tenant-scoped user is probed once against `GET tenant-admin/tenant`: 200 promotes them to `tenant-admin`. The proxy tags every route with a scope — `platform`, `tenant-admin` or `money` — and refuses anything outside the signed-in role's reach before it leaves the server.
+`platform` (no tenant), `tenant-admin` (a tenant's administrator) and `tenant` (an ordinary tenant user or an API key). The login response carries no admin flag, so a tenant-scoped user is probed once against `GET tenant-admin/tenant`: 200 promotes them to `tenant-admin`. The proxy tags every route with a scope — `platform`, `tenant-admin` or `money` — and refuses anything outside the signed-in session's reach before it leaves the server. `platform` and `tenant-admin` go by role; **`money` goes by credential**: the gateway answers 401 on `payments/*` and `transactions*` for any password session, so only an API-key sign-in gets the money screens. A password-only tenant user lands on `/no-access`, which says so.
 
 | Who | Sign-in | Credential the proxy replays |
 |---|---|---|
@@ -130,12 +130,12 @@ Actions held for a second pair of eyes come back as **202 with an approval reque
 
 ## Endpoints that need tenant context
 
-`GET /transactions`, `GET /transactions/{id}`, `payments/collection-balance` and `payments/disbursement-balance` are tenant-scoped: with a staff session the gateway answers 401, so the admin console must not call them. The platform overview is built on `admin/reports/{collections,disbursements}/list` instead, balances appear only for merchant sessions, and there is no cross-tenant transaction list — Reports is that view. A test in `tests/unit/format-filters.test.ts` keeps tenant-only destinations out of the admin navigation.
+`GET /transactions`, `GET /transactions/{id}`, `payments/collection-balance` and `payments/disbursement-balance` need an **API key session**: with any portal cookie session — staff or tenant admin — the gateway answers 401, so those screens are offered only to a merchant sign-in. The platform overview is built on `admin/reports/{collections,disbursements}/list` instead, balances appear only for merchant sessions, and there is no cross-tenant transaction list — Reports is that view. A test in `tests/unit/format-filters.test.ts` keeps tenant-only destinations out of the admin navigation.
 
 ## Open items (need gateway access or backend input)
 
 1. **Confirm the session contract.** Sign in as staff against the real gateway and check the cookie name, attributes and idle timeout, then align `AFRIKOB_PORTAL_SESSION_MINUTES`. Also confirm whether writes need an antiforgery token alongside the cookie — the spec does not mention one.
-2. **Verified live on 2026-09-24** (platform admin and a merchant key): the two-step sign-in, `admin/approvals` (list, filter, open), `admin/users`, `admin/tenants`, `admin/refunds`, `admin/reports/*/list`, and every money endpoint on a merchant token. The live gateway issues `tenant_code` (e.g. `T001`) rather than a tenant id, which the session now reads. **Not yet verified:** the `tenant-admin/*` area, which needs a tenant-admin portal login (the merchant credential is an API key), and `approvals/{id}/decide`, which runs the held action for real.
+2. **Verified live on 2026-09-24** (platform admin and a merchant key): the two-step sign-in, `admin/approvals` (list, filter, open), `admin/users`, `admin/tenants`, `admin/refunds`, `admin/reports/*/list`, and every money endpoint on a merchant token. The live gateway issues `tenant_code` (e.g. `T001`) rather than a tenant id, which the session now reads. The `tenant-admin/*` area was verified the same day on the DEMO tenant through a temporary account (since deactivated): all nine endpoints, plus a 1 GHS top-up request raised and rejected, so `approvals/{id}/decide` is confirmed on the rejecting path. Three contract facts came out of that run: `userType` accepts only `Platform` and `Tenant` (anything else is `statusCode: 6`); **portal sessions are refused on every money endpoint**, whoever holds them; and a tenant admin may not decide a `WALLET_TOPUP` — only a platform admin can.
 
    Earlier findings, still true: an unknown account returns `401 {"statusCode":1,"message":"Invalid email or password."}` and a bad key returns `401 {"statusCode":1,"message":"Invalid API key"}` (a direct call to `/auth/token` answered `statusCode: 5` for the same case, so codes vary by endpoint). With keys injected from your secrets manager:
    ```bash

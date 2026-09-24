@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchRoute, roleMayUse, ROUTE_RULES } from "@/lib/server/routes";
+import { matchRoute, mayUse, ROUTE_RULES } from "@/lib/server/routes";
 
 describe("route allowlist", () => {
   it("covers every non-auth spec operation", () => {
@@ -45,18 +45,25 @@ describe("route allowlist", () => {
   });
 
   it("lets each role reach only its own area", () => {
-    expect(roleMayUse("platform", "platform")).toBe(true);
-    expect(roleMayUse("tenant-admin", "platform")).toBe(false);
-    expect(roleMayUse("tenant", "platform")).toBe(false);
+    const portal = (role: "platform" | "tenant-admin" | "tenant") => ({ role, mode: "portal" as const });
+    const key = { role: "tenant" as const, mode: "apikey" as const };
 
-    expect(roleMayUse("tenant-admin", "tenant-admin")).toBe(true);
-    expect(roleMayUse("tenant", "tenant-admin")).toBe(false);
-    expect(roleMayUse("platform", "tenant-admin")).toBe(false);
+    expect(mayUse(portal("platform"), "platform")).toBe(true);
+    expect(mayUse(portal("tenant-admin"), "platform")).toBe(false);
+    expect(mayUse(key, "platform")).toBe(false);
 
-    // Money needs tenant context, which Afrikob staff do not have.
-    expect(roleMayUse("tenant", "money")).toBe(true);
-    expect(roleMayUse("tenant-admin", "money")).toBe(true);
-    expect(roleMayUse("platform", "money")).toBe(false);
+    expect(mayUse(portal("tenant-admin"), "tenant-admin")).toBe(true);
+    expect(mayUse(portal("tenant"), "tenant-admin")).toBe(false);
+    expect(mayUse(portal("platform"), "tenant-admin")).toBe(false);
+  });
+
+  it("allows money only to an API-key session", () => {
+    // Verified live: the gateway answers 401 on /payments and /transactions for
+    // a password session, whoever holds it.
+    expect(mayUse({ role: "tenant", mode: "apikey" }, "money")).toBe(true);
+    expect(mayUse({ role: "tenant", mode: "portal" }, "money")).toBe(false);
+    expect(mayUse({ role: "tenant-admin", mode: "portal" }, "money")).toBe(false);
+    expect(mayUse({ role: "platform", mode: "portal" }, "money")).toBe(false);
   });
 
   it("flags report downloads as binary, but not the table variants", () => {

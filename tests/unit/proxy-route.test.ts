@@ -138,6 +138,11 @@ describe("BFF proxy", () => {
     expect((await call("GET", "admin/tenants")).status).toBe(403);
     expect((await call("GET", "tenant-admin/tenant")).status).not.toBe(403);
 
+    // Verified live: a password session is refused money by the gateway.
+    const money = await call("GET", "transactions");
+    expect(money.status).toBe(403);
+    expect((await money.json()).message).toMatch(/needs an API key/i);
+
     callUpstream.mockClear();
     await signInAsAdmin();
     // Afrikob staff have no tenant context, so money routes are refused early.

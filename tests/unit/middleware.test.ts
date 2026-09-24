@@ -7,13 +7,13 @@ import type { Role } from "@/lib/session/types";
 
 const SECRET = process.env.SESSION_SECRET as string;
 
-async function req(path: string, role?: Role, expired = false) {
+async function req(path: string, role?: Role, expired = false, mode: "portal" | "apikey" = role === "tenant" ? "apikey" : "portal") {
   const headers: Record<string, string> = {};
   if (role) {
     const now = Math.floor(Date.now() / 1000);
     const session = {
       credential:
-        role === "tenant" ? ({ kind: "bearer", jwt: "j" } as const) : ({ kind: "cookie", cookie: "afk.portal=abc" } as const),
+        mode === "apikey" ? ({ kind: "bearer", jwt: "j" } as const) : ({ kind: "cookie", cookie: "afk.portal=abc" } as const),
       role,
       env: "test" as const,
       tenantId: null,
@@ -58,6 +58,16 @@ describe("middleware", () => {
     expect((await req("/admin/refunds", "platform")).headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("sends a password-only tenant somewhere honest", async () => {
+    // Verified live: the gateway refuses money endpoints for a password session.
+    expect(location(await req("/dashboard", "tenant", false, "portal"))).toBe("http://localhost/no-access");
+    expect(location(await req("/collections", "tenant", false, "portal"))).toBe("http://localhost/no-access");
+    expect((await req("/no-access", "tenant", false, "portal")).headers.get("x-middleware-next")).toBe("1");
+    // An API-key tenant keeps the money screens.
+    expect((await req("/dashboard", "tenant")).headers.get("x-middleware-next")).toBe("1");
+    expect(location(await req("/no-access", "tenant"))).toBe("http://localhost/dashboard");
+  });
+
   it("keeps each area to its own role", async () => {
     // A tenant admin runs their own business, not the platform.
     expect(location(await req("/admin/tenants", "tenant-admin"))).toBe("http://localhost/tenant-admin");
@@ -65,7 +75,8 @@ describe("middleware", () => {
     expect(location(await req("/tenant-admin/people", "tenant"))).toBe("http://localhost/dashboard");
     // Afrikob staff have no tenant context, so the money screens are not theirs.
     expect(location(await req("/collections", "platform"))).toBe("http://localhost/admin");
+    expect(location(await req("/collections", "tenant-admin"))).toBe("http://localhost/tenant-admin");
     expect((await req("/tenant-admin/approvals", "tenant-admin")).headers.get("x-middleware-next")).toBe("1");
-    expect((await req("/collections", "tenant-admin")).headers.get("x-middleware-next")).toBe("1");
+
   });
 });

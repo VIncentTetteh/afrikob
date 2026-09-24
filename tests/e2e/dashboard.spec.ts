@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const ADMIN = { email: "ops@afrikob.com", password: "correct-horse" };
 const TENANT_ADMIN = { email: "owner@afikob.com", password: "tenant-horse" };
+const TENANT_CLERK = { email: "clerk@afikob.com", password: "tenant-clerk" };
 const TENANT_KEY = "e2e-tenant-key-0001";
 /** The mock gateway always emails this code. */
 const LOGIN_CODE = "654321";
@@ -188,6 +189,9 @@ test("a tenant admin requests funds and an Afrikob admin approves them", async (
   // The approved top-up has been credited to the tenant's wallet.
   await page.goto("/tenant-admin");
   await expect(visible(page, "GHS 12,458.60")).toBeVisible();
+  // A password session has no money screens: the gateway refuses those.
+  await page.goto("/collections");
+  await expect(page).toHaveURL(/\/tenant-admin$/);
   await staff.close();
 });
 
@@ -226,4 +230,22 @@ test("a signed-out admin resets their password and signs in with it", async ({ p
 
   await signInAsAdmin(page, "a-brand-new-password");
   await expect(page).toHaveURL(/\/admin$/);
+});
+
+/**
+ * A tenant user with only a password reaches no money screens: the gateway
+ * refuses a portal session there, so the app says so instead of failing later.
+ */
+test("a password-only tenant user lands on the dead end, not a broken dashboard", async ({ page }) => {
+  await signInWithPassword(page, TENANT_CLERK.email, TENANT_CLERK.password);
+  await expect(page).toHaveURL(/\/no-access$/);
+  await expect(page.getByText(/API key/i).first()).toBeVisible();
+  // Every money destination sends them back here.
+  for (const path of ["/dashboard", "/collections", "/disbursements", "/refunds"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL(/\/no-access$/);
+  }
+  // As does the tenant administration area, which is not theirs.
+  await page.goto("/tenant-admin");
+  await expect(page).toHaveURL(/\/no-access$/);
 });

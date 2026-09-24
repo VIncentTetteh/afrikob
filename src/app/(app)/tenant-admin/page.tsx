@@ -129,15 +129,20 @@ export default function TenantAdminPage() {
             ) : (
               <ul className="divide-y divide-line">
                 {wallets.map((wallet, index) => (
-                  <li key={`${wallet.walletType ?? index}`} className="flex items-baseline justify-between gap-4 py-3">
-                    <span>
+                  <li
+                    key={`${wallet.walletType ?? index}`}
+                    className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3"
+                  >
+                    <span className="min-w-0">
                       <span className="block text-sm font-medium">{walletLabel(wallet, index)}</span>
                       <span className="block text-xs text-ink-soft">
                         {formatMoney(wallet.reservedBalance, wallet.currency)} reserved ·{" "}
                         {formatMoney(wallet.totalBalance, wallet.currency)} total
                       </span>
                     </span>
-                    <span className="figure text-lg">{formatMoney(wallet.availableBalance, wallet.currency)}</span>
+                    <span className="figure whitespace-nowrap text-lg">
+                      {formatMoney(wallet.availableBalance, wallet.currency)}
+                    </span>
                   </li>
                 ))}
               </ul>
