@@ -67,7 +67,7 @@ describe("portal login (email, password, then emailed code)", () => {
     // Nothing is signed in yet: only the sealed pending cookie exists.
     expect(await storedSession()).toBeNull();
     expect(cookieJar.has("afk_pending")).toBe(true);
-    expect(cookieJar.get("afk_pending")?.options).toMatchObject({ httpOnly: true, sameSite: "strict" });
+    expect(cookieJar.get("afk_pending")?.options).toMatchObject({ httpOnly: true, sameSite: "lax" });
     expect((await getSession()).status).toBe(401);
   });
 
@@ -79,6 +79,11 @@ describe("portal login (email, password, then emailed code)", () => {
     const res = await verifyRequest({ code: "654321" });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ role: "platform", label: "Doris Bosompem", mode: "portal", canCheck: false });
+
+    // Arriving from a link on another site must still carry the session, so the
+    // cookies are lax: strict would bounce a signed-in operator to /signin.
+    expect(cookieJar.get("afk_session")?.options).toMatchObject({ httpOnly: true, sameSite: "lax", secure: false });
+    expect(cookieJar.get("afk_csrf")?.options).toMatchObject({ httpOnly: false, sameSite: "lax" });
 
     const sent = callUpstream.mock.calls[1][0] as { path: string; body: string };
     expect(sent.path).toBe("portal/auth/verify-login-code");

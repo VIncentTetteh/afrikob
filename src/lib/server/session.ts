@@ -6,6 +6,16 @@ import { CSRF_COOKIE, PENDING_COOKIE, SESSION_COOKIE, type PendingLogin, type Se
 
 const isProd = process.env.NODE_ENV === "production";
 
+/**
+ * "lax", not "strict". Strict withholds the cookie on every cross-site
+ * navigation, so opening the dashboard from a link in email, Slack or the
+ * hosting console arrives with no session and bounces a signed-in operator to
+ * /signin, which reads as being silently logged out. Lax still withholds it on
+ * cross-site POSTs, and every state-changing call additionally carries the
+ * double-submit CSRF token, which a cross-origin page cannot read.
+ */
+const SAME_SITE = "lax" as const;
+
 export function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
@@ -33,7 +43,7 @@ export async function writeSession(data: SessionData, options: { rotateCsrf?: bo
   store.set(SESSION_COOKIE, await sealSession(data, serverEnv().SESSION_SECRET), {
     httpOnly: true,
     secure: isProd,
-    sameSite: "strict",
+    sameSite: SAME_SITE,
     path: "/",
     maxAge,
   });
@@ -41,7 +51,7 @@ export async function writeSession(data: SessionData, options: { rotateCsrf?: bo
     store.set(CSRF_COOKIE, crypto.randomUUID(), {
       httpOnly: false,
       secure: isProd,
-      sameSite: "strict",
+      sameSite: SAME_SITE,
       path: "/",
       maxAge,
     });
@@ -68,7 +78,7 @@ export async function writePendingLogin(data: PendingLogin): Promise<void> {
   store.set(PENDING_COOKIE, await sealPending(data, serverEnv().SESSION_SECRET), {
     httpOnly: true,
     secure: isProd,
-    sameSite: "strict",
+    sameSite: SAME_SITE,
     path: "/",
     maxAge: Math.max(0, data.exp - nowSeconds()),
   });

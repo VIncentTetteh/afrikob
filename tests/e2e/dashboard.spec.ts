@@ -249,3 +249,22 @@ test("a password-only tenant user lands on the dead end, not a broken dashboard"
   await page.goto("/tenant-admin");
   await expect(page).toHaveURL(/\/no-access$/);
 });
+
+/**
+ * A link from anywhere else (email, chat, the hosting console) must open the
+ * dashboard already signed in. SameSite=strict silently dropped the session
+ * here and showed the sign-in page instead.
+ */
+test("a link from another site opens the dashboard still signed in", async ({ page, baseURL }) => {
+  await signInAsAdmin(page);
+  await page.waitForURL(/\/admin$/);
+
+  // 127.0.0.1 and localhost are different sites to the browser, which is all a
+  // cross-site arrival needs.
+  const elsewhere = baseURL!.replace("localhost", "127.0.0.1");
+  await page.goto(elsewhere);
+  await page.setContent(`<a id="go" href="${baseURL}/admin">Open the dashboard</a>`);
+  await Promise.all([page.waitForNavigation(), page.click("#go")]);
+
+  await expect(page).toHaveURL(/\/admin$/);
+});
