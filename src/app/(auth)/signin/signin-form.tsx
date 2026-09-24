@@ -11,7 +11,7 @@ import { Field, Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/api/errors";
 import { isPendingLogin, useLogin, type LoginInput } from "@/lib/api/session";
 import { apiKeyLoginSchema, portalLoginSchema, type ApiKeyLogin, type PortalLogin } from "@/lib/api/schemas/requests";
-import { homeFor, type Environment, type Role } from "@/lib/session/types";
+import { homeFor, safeNextPath, type AuthMode, type Environment, type Role } from "@/lib/session/types";
 import { VerifyStep } from "./verify-step";
 import { cn } from "@/lib/utils";
 
@@ -49,8 +49,11 @@ export function SignInForm({ environments }: { environments: Environment[] }) {
   const portalForm = useForm<PortalLogin>({ resolver: zodResolver(portalLoginSchema), defaultValues: { email: "", password: "" } });
   const keyForm = useForm<ApiKeyLogin>({ resolver: zodResolver(apiKeyLoginSchema), defaultValues: { apiKey: "" } });
 
-  const goHome = (role: Role) => {
-    router.replace(homeFor(role));
+  // "Sign in to pick up where you left off" is a promise: middleware parks the
+  // page they were denied in ?next=, and this returns them to it.
+  const goOn = (role: Role, mode: AuthMode) => {
+    const back = safeNextPath(params.get("next"));
+    router.replace(back ?? homeFor(role, mode));
     router.refresh();
   };
 
@@ -59,7 +62,7 @@ export function SignInForm({ environments }: { environments: Environment[] }) {
       onSuccess: (result) => {
         // A password alone never signs anyone in: the gateway emails a code first.
         if (isPendingLogin(result)) setAwaitingCode({ maskedEmail: result.maskedEmail });
-        else goHome(result.role);
+        else goOn(result.role, method);
       },
     });
 
@@ -77,7 +80,7 @@ export function SignInForm({ environments }: { environments: Environment[] }) {
   const error = login.isError ? errorMessage(login.error) : null;
 
   if (awaitingCode) {
-    return <VerifyStep maskedEmail={awaitingCode.maskedEmail} onVerified={goHome} onStartOver={startOver} />;
+    return <VerifyStep maskedEmail={awaitingCode.maskedEmail} onVerified={(role: Role) => goOn(role, "portal")} onStartOver={startOver} />;
   }
 
   return (

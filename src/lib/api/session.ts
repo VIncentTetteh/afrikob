@@ -34,6 +34,24 @@ export type PasswordStep =
   | { step: "reset"; env: Environment; email: string; code: string; newPassword: string; confirmPassword: string };
 
 const SESSION_STALE_MS = 5 * 60 * 1000;
+const SESSION_RETRIES = 2;
+
+/**
+ * Only a 401 means signed out. A dropped connection, a cold-start 502 or a
+ * fetch aborted by the laptop sleeping are all transient: retry them, because
+ * treating them as a sign-out throws away a session that is still good.
+ */
+function retrySession(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status === 401) return false;
+  return failureCount < SESSION_RETRIES;
+}
+
+/** The sign-in URL, keeping the page someone was on so they return to it. */
+export function signInHref(reason: "expired", here: string): string {
+  const params = new URLSearchParams({ reason });
+  if (here && here !== "/" && !here.startsWith("/signin")) params.set("next", here);
+  return `/signin?${params.toString()}`;
+}
 
 async function postJson<T>(url: string, body?: unknown): Promise<T> {
   const csrf = readCsrfToken();
@@ -61,7 +79,7 @@ export function useSession() {
       return (await res.json()) as ClientSession;
     },
     staleTime: SESSION_STALE_MS,
-    retry: false,
+    retry: retrySession,
   });
 }
 

@@ -1,9 +1,10 @@
 "use client";
 
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Toaster, toast } from "sonner";
+import { signInHref } from "@/lib/api/session";
 import { onUnauthorized } from "@/lib/api/client";
 import { ApiError, errorMessage } from "@/lib/api/errors";
 import { useUi } from "@/stores/ui";
@@ -26,13 +27,14 @@ function ThemeSync() {
 
 function UnauthorizedRedirect() {
   const router = useRouter();
+  const pathname = usePathname();
   useEffect(
     () =>
       onUnauthorized(() => {
-        router.replace("/signin?reason=expired");
+        router.replace(signInHref("expired", pathname));
         router.refresh();
       }),
-    [router],
+    [router, pathname],
   );
   return null;
 }

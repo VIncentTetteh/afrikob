@@ -1,19 +1,25 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { CommandBar } from "@/components/layout/command-bar";
 import { Rail, TabBar } from "@/components/layout/rail";
-import { useSession } from "@/lib/api/session";
+import { ApiError } from "@/lib/api/errors";
+import { signInHref, useSession } from "@/lib/api/session";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { data: session, isError } = useSession();
+  const { data: session, error } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  // Only a 401 is a sign-out. Anything else (offline, a cold-start 502, a fetch
+  // cancelled by the laptop sleeping) is transient and must not evict someone
+  // whose session is still perfectly good.
+  const signedOut = error instanceof ApiError && error.status === 401;
 
   useEffect(() => {
-    if (isError) router.replace("/signin?reason=expired");
-  }, [isError, router]);
+    if (signedOut) router.replace(signInHref("expired", pathname));
+  }, [signedOut, router, pathname]);
 
   if (!session) {
     return (

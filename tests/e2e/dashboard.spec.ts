@@ -56,9 +56,10 @@ test("will not sign an admin in until the emailed code is verified", async ({ pa
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   await expect(page.getByText("o***@afrikob.com")).toBeVisible();
 
-  // The password alone is not a session: the app stays shut.
+  // The password alone is not a session: the app stays shut, holding the page
+  // they asked for so signing in properly takes them there.
   await page.goto("/admin");
-  await expect(page).toHaveURL(/\/signin$/);
+  await expect(page).toHaveURL(/\/signin\?next=%2Fadmin$/);
 
   await submitPassword(page);
   await page.getByLabel("One-time code").fill("000000");
@@ -77,7 +78,7 @@ test("shows the landing page to visitors and explains a bad password", async ({ 
   await expect(page).toHaveURL(/\/signin$/);
 
   await page.goto("/collections");
-  await expect(page).toHaveURL(/\/signin$/);
+  await expect(page).toHaveURL(/\/signin\?next=%2Fcollections$/);
   await submitPassword(page, "wrong-password");
   await expect(page.getByRole("alert").filter({ hasText: "Incorrect email or password" })).toBeVisible();
 });
@@ -267,4 +268,19 @@ test("a link from another site opens the dashboard still signed in", async ({ pa
   await Promise.all([page.waitForNavigation(), page.click("#go")]);
 
   await expect(page).toHaveURL(/\/admin$/);
+});
+
+/** Signing in after being bounced returns you to the page you asked for. */
+test("returns you to the page you were trying to open", async ({ page }) => {
+  await page.goto("/admin/approvals");
+  await expect(page).toHaveURL(/\/signin\?next=%2Fadmin%2Fapprovals$/);
+
+  await page.getByLabel("Email").fill(ADMIN.email);
+  await page.getByLabel("Password", { exact: true }).fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("One-time code").fill(LOGIN_CODE);
+  await page.getByRole("button", { name: /Verify and sign in/ }).click();
+
+  await expect(page).toHaveURL(/\/admin\/approvals$/);
+  await expect(page.getByRole("heading", { name: "Approvals" })).toBeVisible();
 });

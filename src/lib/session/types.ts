@@ -73,6 +73,34 @@ export interface PendingLogin {
   exp: number;
 }
 
+/** Default idle life of a portal session, in minutes. */
+export const DEFAULT_PORTAL_SESSION_MINUTES = 60;
+
+/**
+ * A portal session renews once it is past half its life, so someone who keeps
+ * working is never signed out mid-task. Bearer sessions expire with their JWT
+ * and cannot be extended, so they are left alone.
+ */
+export function isRenewable(session: SessionData, now: number): boolean {
+  if (session.credential.kind !== "cookie") return false;
+  return now > session.iat + (session.exp - session.iat) / 2;
+}
+
+/** The same session, its idle window started again from `now`. */
+export function renewed(session: SessionData, now: number, ttlSeconds: number): SessionData {
+  return { ...session, iat: now, exp: now + ttlSeconds };
+}
+
+/**
+ * Where to send someone after they sign back in. Only a path within this app is
+ * allowed: anything else (an absolute URL, a protocol-relative "//host") would
+ * turn the sign-in page into an open redirect.
+ */
+export function safeNextPath(value: string | null | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
+  return value;
+}
+
 export const SESSION_COOKIE = "afk_session";
 export const PENDING_COOKIE = "afk_pending";
 export const CSRF_COOKIE = "afk_csrf";

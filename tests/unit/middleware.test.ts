@@ -7,7 +7,13 @@ import type { Role } from "@/lib/session/types";
 
 const SECRET = process.env.SESSION_SECRET as string;
 
-async function req(path: string, role?: Role, expired = false, mode: "portal" | "apikey" = role === "tenant" ? "apikey" : "portal") {
+async function req(
+  path: string,
+  role?: Role,
+  expired = false,
+  mode: "portal" | "apikey" = role === "tenant" ? "apikey" : "portal",
+  aged = false,
+) {
   const headers: Record<string, string> = {};
   if (role) {
     const now = Math.floor(Date.now() / 1000);
@@ -21,8 +27,9 @@ async function req(path: string, role?: Role, expired = false, mode: "portal" | 
       label: "x",
       canMake: true,
       canCheck: true,
-      iat: now,
-      exp: now + (expired ? -10 : 600),
+      // `aged` puts the session past half its life, where renewal kicks in.
+      iat: now - (aged ? 590 : 0),
+      exp: expired ? now - 10 : now + (aged ? 10 : 600),
     };
     headers.cookie = `afk_session=${await sealSession(session, SECRET)}`;
   }
@@ -33,8 +40,8 @@ const location = (res: Response) => res.headers.get("location");
 
 describe("middleware", () => {
   it("redirects anonymous users to sign-in", async () => {
-    expect(location(await req("/collections"))).toBe("http://localhost/signin");
-    expect(location(await req("/dashboard"))).toBe("http://localhost/signin");
+    expect(location(await req("/collections"))).toBe("http://localhost/signin?next=%2Fcollections");
+    expect(location(await req("/dashboard"))).toBe("http://localhost/signin?next=%2Fdashboard");
     expect((await req("/signin")).headers.get("x-middleware-next")).toBe("1");
   });
 
@@ -78,5 +85,41 @@ describe("middleware", () => {
     expect(location(await req("/collections", "tenant-admin"))).toBe("http://localhost/tenant-admin");
     expect((await req("/tenant-admin/approvals", "tenant-admin")).headers.get("x-middleware-next")).toBe("1");
 
+  });
+});
+
+describe("staying signed in", () => {
+  it("keeps where someone was headed, and returns them there after signing in", async () => {
+    // Denied while signed out: the destination rides along.
+    expect(location(await req("/admin/approvals?status=Pending"))).toBe(
+      "http://localhost/signin?next=%2Fadmin%2Fapprovals%3Fstatus%3DPending",
+    );
+    // Expired says so, and still keeps the destination.
+    const expiredRes = location(await req("/admin/refunds", "platform", true));
+    expect(expiredRes).toContain("reason=expired");
+    expect(expiredRes).toContain("next=%2Fadmin%2Frefunds");
+    // Signing in with a destination lands there rather than at the generic home.
+    expect(location(await req("/signin?next=%2Fadmin%2Frefunds", "platform"))).toBe("http://localhost/admin/refunds");
+  });
+
+  it("refuses to be turned into an open redirect", async () => {
+    for (const evil of ["https://evil.example/x", "//evil.example/x", "/\\evil.example"]) {
+      const res = location(await req(`/signin?next=${encodeURIComponent(evil)}`, "platform"));
+      expect(res).toBe("http://localhost/admin");
+    }
+  });
+
+  it("renews a portal session that is past half its life, on ordinary navigation", async () => {
+    const fresh = await req("/admin", "platform");
+    expect(fresh.headers.getSetCookie().join()).not.toContain("afk_session");
+
+    const aged = await req("/admin", "platform", false, "portal", true);
+    const cookie = aged.headers.getSetCookie().find((c) => c.startsWith("afk_session="));
+    expect(cookie).toBeDefined();
+    expect(cookie).toContain("SameSite=lax");
+
+    // An API-key session expires with its JWT and is never extended.
+    const key = await req("/dashboard", "tenant", false, "apikey", true);
+    expect(key.headers.getSetCookie().join()).not.toContain("afk_session");
   });
 });

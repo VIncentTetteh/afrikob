@@ -1,6 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { unsealSession } from "@/lib/session/seal";
-import { authMode, homeFor, SESSION_COOKIE, type Role } from "@/lib/session/types";
+import { sealSession, unsealSession } from "@/lib/session/seal";
+import {
+  authMode,
+  DEFAULT_PORTAL_SESSION_MINUTES,
+  homeFor,
+  isRenewable,
+  renewed,
+  safeNextPath,
+  SESSION_COOKIE,
+  type Role,
+  type SessionData,
+} from "@/lib/session/types";
 
 const LANDING = "/";
 /** Pages a signed-out visitor may open. */
@@ -14,23 +24,53 @@ const AREAS: { prefix: string; role: Role }[] = [
   { prefix: "/tenant-admin", role: "tenant-admin" },
 ];
 
+function sessionTtlSeconds(): number {
+  const minutes = Number(process.env.AFRIKOB_PORTAL_SESSION_MINUTES);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_PORTAL_SESSION_MINUTES) * 60;
+}
+
+/**
+ * Renews the session on ordinary navigation. Without this only data calls kept
+ * a session alive, so someone reading a long page could be signed out mid-task.
+ */
+async function withRenewal(response: NextResponse, session: SessionData, secret: string): Promise<NextResponse> {
+  const now = Math.floor(Date.now() / 1000);
+  if (!isRenewable(session, now)) return response;
+  const next = renewed(session, now, sessionTtlSeconds());
+  response.cookies.set(SESSION_COOKIE, await sealSession(next, secret), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: next.exp - now,
+  });
+  return response;
+}
+
 /** Route guard: unauthenticated users go to /signin; tenants cannot open /admin. */
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const secret = process.env.SESSION_SECRET ?? "";
-  const session = secret ? await unsealSession(request.cookies.get(SESSION_COOKIE)?.value, secret) : null;
+  // An expired seal no longer decrypts, so the cookie's presence is what marks
+  // someone as having been signed in rather than never signed in at all.
+  const sealed = request.cookies.get(SESSION_COOKIE)?.value;
+  const session = secret && sealed ? await unsealSession(sealed, secret) : null;
   const active = session && session.exp * 1000 > Date.now() ? session : null;
   const isPublic = pathname === LANDING || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (!active && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
-    url.search = session ? "?reason=expired" : "";
+    // Keep where they were headed, so signing back in returns them there.
+    const back = `${pathname}${request.nextUrl.search}`;
+    url.search = new URLSearchParams({ ...(sealed ? { reason: "expired" } : {}), next: back }).toString();
     return NextResponse.redirect(url);
   }
   // Signed-in people go straight to their own dashboard, landing page included.
   if (active && isPublic) {
-    return NextResponse.redirect(new URL(homeFor(active.role, authMode(active)), request.url));
+    const home = homeFor(active.role, authMode(active));
+    const back = safeNextPath(request.nextUrl.searchParams.get("next"));
+    return await withRenewal(NextResponse.redirect(new URL(back ?? home, request.url)), active, secret);
   }
   if (active) {
     const home = homeFor(active.role, authMode(active));
@@ -46,6 +86,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     if (pathname === NO_ACCESS && home !== NO_ACCESS) {
       return NextResponse.redirect(new URL(home, request.url));
     }
+    return await withRenewal(NextResponse.next(), active, secret);
   }
   return NextResponse.next();
 }

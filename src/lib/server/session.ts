@@ -2,7 +2,15 @@ import "server-only";
 import { cookies } from "next/headers";
 import { serverEnv } from "@/lib/env";
 import { sealPending, sealSession, unsealPending, unsealSession } from "@/lib/session/seal";
-import { CSRF_COOKIE, PENDING_COOKIE, SESSION_COOKIE, type PendingLogin, type SessionData } from "@/lib/session/types";
+import {
+  CSRF_COOKIE,
+  isRenewable,
+  PENDING_COOKIE,
+  renewed,
+  SESSION_COOKIE,
+  type PendingLogin,
+  type SessionData,
+} from "@/lib/session/types";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -64,12 +72,13 @@ export async function writeSession(data: SessionData, options: { rotateCsrf?: bo
  * their JWT, so they are left alone.
  */
 export async function slideSession(session: SessionData, changed = false): Promise<void> {
-  const isPortal = session.credential.kind === "cookie";
-  const halfLife = session.iat + (session.exp - session.iat) / 2;
-  const stale = isPortal && nowSeconds() > halfLife;
+  const now = nowSeconds();
+  const stale = isRenewable(session, now);
   if (!stale && !changed) return;
-  const iat = nowSeconds();
-  await writeSession({ ...session, iat, exp: stale ? portalSessionExpiry(iat) : session.exp }, { rotateCsrf: false });
+  const next = stale
+    ? renewed(session, now, serverEnv().AFRIKOB_PORTAL_SESSION_MINUTES * 60)
+    : { ...session, iat: now };
+  await writeSession(next, { rotateCsrf: false });
 }
 
 /** Holds a password-verified sign-in while its emailed code is outstanding. */
