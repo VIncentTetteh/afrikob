@@ -129,6 +129,23 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
       duration_ms: Date.now() - started,
     });
 
+    // An API-key token is bound to the IP that minted it, and serverless calls
+    // leave from whichever IP their instance has, so a 401 here usually means
+    // "wrong instance", not "dead token" — and the retry and probe go out the
+    // same wrong IP, so they cannot tell the difference. The token's own expiry,
+    // enforced by readSession, is the only reliable end of such a session.
+    // Answer 503 so the client's query retry can land on a working instance.
+    if (isUnauthenticated(upstream.status) && session.credential.kind === "bearer") {
+      await upstream.body?.cancel();
+      logger.warn("gateway refused an API-key call, session kept", {
+        requestId,
+        method,
+        route: rule.pattern.source,
+        upstreamStatus: upstream.status,
+      });
+      return envelopeError(503, "The gateway turned this request away. Please try again.", { requestId });
+    }
+
     // Only 401 means the session is dead. A 403 is this call being refused —
     // signing the person out over it would end a working session.
     if (isUnauthenticated(upstream.status)) {

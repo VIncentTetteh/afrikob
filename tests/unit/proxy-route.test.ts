@@ -152,27 +152,27 @@ describe("BFF proxy", () => {
   });
 
   it("reads the gateway's redirect to its login page as signed out", async () => {
-    await signIn();
+    await signInAsAdmin();
     // ASP.NET answers an unauthenticated API call with 302 to /Account/Login.
     const redirected = new Response(null, { status: 302, headers: { location: "/Account/Login" } });
     callUpstream
       .mockResolvedValueOnce(redirected)
       .mockResolvedValueOnce(new Response(null, { status: 302 }))
       .mockResolvedValueOnce(new Response(null, { status: 302 }));
-    const res = await call("GET", "transactions");
+    const res = await call("GET", "admin/refunds");
     expect(res.status).toBe(401);
     expect((await res.json()).message).toMatch(/session has expired/i);
     expect(cookieJar.has("afk_session")).toBe(false);
   });
 
-  it("clears the session when a 401 is confirmed by a failing probe", async () => {
-    await signIn();
+  it("clears a portal session when a 401 is confirmed by a failing probe", async () => {
+    await signInAsAdmin();
     callUpstream
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockResolvedValueOnce(json({ message: "expired" }, 401));
-    expect((await call("GET", "transactions")).status).toBe(401);
-    expect((callUpstream.mock.calls[2][0] as { path: string }).path).toBe("payments/get-all-banks");
+    expect((await call("GET", "admin/refunds")).status).toBe(401);
+    expect((callUpstream.mock.calls[2][0] as { path: string }).path).toBe("admin/tenants");
     expect(cookieJar.has("afk_session")).toBe(false);
   });
 
@@ -304,21 +304,21 @@ describe("not mistaking a bad moment for a dead session", () => {
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockResolvedValueOnce(json({ statusCode: 0, data: [] }));
 
-    await call("POST", "payments/collection", { headers: { "x-csrf-token": CSRF }, body: { amount: 1 } });
+    const res = await call("POST", "payments/collection", { headers: { "x-csrf-token": CSRF }, body: { amount: 1 } });
 
-    // One attempt, then the probe. The payment is never sent twice.
-    expect(callUpstream).toHaveBeenCalledTimes(2);
-    expect((callUpstream.mock.calls[1][0] as { path: string }).path).toBe("payments/get-all-banks");
+    // One attempt and nothing more. The payment is never sent twice.
+    expect(callUpstream).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(503);
   });
 
   it("keeps the session when the probe cannot be reached at all", async () => {
-    await signIn();
+    await signInAsAdmin();
     callUpstream
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockResolvedValueOnce(json({ message: "expired" }, 401))
       .mockRejectedValueOnce(new Error("fetch failed"));
 
-    const res = await call("GET", "payments/collection-balance");
+    const res = await call("GET", "admin/refunds");
 
     expect(res.status).toBe(403);
     expect(cookieJar.has("afk_session")).toBe(true);
@@ -326,16 +326,52 @@ describe("not mistaking a bad moment for a dead session", () => {
 
   it("keeps the session when the probe is rate limited or erroring", async () => {
     for (const status of [429, 500]) {
-      await signIn();
+      await signInAsAdmin();
       callUpstream
         .mockResolvedValueOnce(json({ message: "expired" }, 401))
         .mockResolvedValueOnce(json({ message: "expired" }, 401))
         .mockResolvedValueOnce(json({ message: "slow down" }, status));
 
-      const res = await call("GET", "payments/collection-balance");
+      const res = await call("GET", "admin/refunds");
 
       expect(res.status).toBe(403);
       expect(cookieJar.has("afk_session")).toBe(true);
     }
+  });
+});
+
+/**
+ * The gateway binds an API-key token to the IP that minted it, and serverless
+ * instances do not share one outbound IP. Caught in production: a merchant was
+ * signed out seconds after signing in because one instance's calls, its retry
+ * and its probe all went out from the wrong IP.
+ */
+describe("API-key sessions and the gateway's IP-bound tokens", () => {
+  it("keeps the session and answers a retryable 503 when a read is refused", async () => {
+    await signIn();
+    callUpstream.mockResolvedValue(json({ message: "Unauthorized" }, 401));
+
+    const res = await call("GET", "payments/disbursement-balance");
+
+    expect(res.status).toBe(503);
+    expect(cookieJar.has("afk_session")).toBe(true);
+    // Retried once; no probe, since it would leave from the same IP.
+    expect(callUpstream).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats the gateway's sign-in redirect the same way", async () => {
+    await signIn();
+    callUpstream.mockResolvedValue(new Response(null, { status: 302, headers: { location: "/Account/Login" } }));
+
+    expect((await call("GET", "transactions")).status).toBe(503);
+    expect(cookieJar.has("afk_session")).toBe(true);
+  });
+
+  it("still ends the session once the token itself has expired", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    await signIn({ iat: now - 600, exp: now - 1 });
+
+    expect((await call("GET", "transactions")).status).toBe(401);
+    expect(callUpstream).not.toHaveBeenCalled();
   });
 });
