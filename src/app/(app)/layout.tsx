@@ -2,7 +2,8 @@
 
 import { Loader2 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
+import { ActivityBar } from "@/components/layout/activity-bar";
 import { CommandBar } from "@/components/layout/command-bar";
 import { Rail, TabBar } from "@/components/layout/rail";
 import { ApiError } from "@/lib/api/errors";
@@ -31,6 +32,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh">
+      <Suspense fallback={null}>
+        <ActivityBar />
+      </Suspense>
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-paper focus:p-3"

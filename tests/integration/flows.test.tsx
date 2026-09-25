@@ -273,6 +273,32 @@ describe("Bulk disbursements", () => {
 });
 
 describe("Admin refunds", () => {
+  it("filters the tabs itself and never sends ?status= the gateway refuses", async () => {
+    const user = userEvent.setup();
+    const searches: string[] = [];
+    mockSession();
+    server.use(
+      http.get("*/api/afrikob/admin/refunds", ({ request }) => {
+        searches.push(new URL(request.url).search);
+        return HttpResponse.json(
+          envelope([
+            { ...refunds[0], id: "r-wait", status: "PendingReview", reason: "Charged twice" },
+            { ...refunds[0], id: "r-done", status: "Completed", reason: "Order cancelled" },
+          ]),
+        );
+      }),
+    );
+    renderWithClient(<AdminRefundsPage />);
+    expect((await screen.findAllByText("Charged twice")).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Settled" }));
+    await waitFor(() => expect(screen.queryAllByText("Charged twice")).toHaveLength(0));
+    expect(screen.getAllByText("Order cancelled").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Waiting" }));
+    expect((await screen.findAllByText("Charged twice")).length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Order cancelled")).toHaveLength(0);
+    expect(searches.every((q) => !q.includes("status="))).toBe(true);
+  });
+
   it("approves a waiting refund and refreshes the list", async () => {
     const user = userEvent.setup();
     let approved = false;

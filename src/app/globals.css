@@ -166,3 +166,23 @@ h2 {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Indeterminate activity bar: a runner sweeping across the top of the screen. */
+@keyframes activity-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.activity-bar__runner {
+  animation: activity-sweep 1.1s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-bar__runner {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}

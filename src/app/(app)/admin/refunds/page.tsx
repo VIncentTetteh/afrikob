@@ -21,13 +21,17 @@ import { useSession } from "@/lib/api/session";
 import { display, formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** Status values passed to ?status=. Confirm the exact casing against the gateway. */
-const STATUS_TABS = [
+/**
+ * Tabs filter the loaded list rather than sending ?status=: the gateway refused
+ * "Pending" ("Unrecognized status") and the spec lists no valid values, so each
+ * tab matches the status wording instead, whatever the gateway calls it.
+ */
+const STATUS_TABS: { value: string; label: string; match?: RegExp }[] = [
   { value: "", label: "All" },
-  { value: "Pending", label: "Waiting" },
-  { value: "Approved", label: "Approved" },
-  { value: "Rejected", label: "Rejected" },
-  { value: "Completed", label: "Settled" },
+  { value: "waiting", label: "Waiting", match: /pend|request|await|review|new|submitted/i },
+  { value: "approved", label: "Approved", match: /approv|process/i },
+  { value: "rejected", label: "Rejected", match: /reject|declin|cancel/i },
+  { value: "settled", label: "Settled", match: /complet|settl|paid|refunded|success|fail/i },
 ];
 
 const AWAITING = /pend|request|await/i;
@@ -37,7 +41,12 @@ type Action = { kind: "view" | "approve" | "reject" | "complete"; refund: Refund
 
 export default function AdminRefundsPage() {
   const [status, setStatus] = useState("");
-  const refunds = useAdminRefunds(status || undefined);
+  const refunds = useAdminRefunds();
+  const tab = STATUS_TABS.find((t) => t.value === status);
+  const rows = useMemo(
+    () => (tab?.match ? (refunds.data ?? []).filter((r) => tab.match?.test(r.status ?? "")) : (refunds.data ?? [])),
+    [refunds.data, tab],
+  );
   const { data: session } = useSession();
   const [action, setAction] = useState<Action>(null);
   const canCheck = session?.canCheck ?? true;
@@ -136,7 +145,7 @@ export default function AdminRefundsPage() {
       <Ledger
         tableId="admin-refunds"
         columns={columns}
-        data={refunds.data ?? []}
+        data={rows}
         loading={refunds.isLoading}
         error={refunds.error}
         onRetry={() => refunds.refetch()}
