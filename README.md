@@ -142,9 +142,10 @@ Actions held for a second pair of eyes come back as **202 with an approval reque
    AFRIKOB_API_URL=… AFRIKOB_TENANT_KEY=… AFRIKOB_ADMIN_KEY=… node scripts/capture-responses.mjs
    ```
    Use the output to confirm `StatusCode` values 2–7 (only 0 = success and 1 = failure are known), the `userType` values, the `?status=` values for admin refunds, and how long an emailed login code stays valid.
-3. **Vercel hosting.** Add a firewall rate-limit rule on `/api/auth/login`, `/api/auth/verify-login` and `/api/auth/password`. Static IPs are not needed: the gateway is reachable from anywhere over `myghcard.com`. Worth asking whether the API should sit behind its own hostname rather than sharing `myghcard.com:3115`.
-4. **Server-side list filtering.** `GET /transactions` takes only `page` and `size`, so filtering and page totals apply to the loaded page. Reports are filtered server side and carry the full totals.
-5. **No single-record endpoints** for tenants, so tenant details come from the cached list.
+3. **The gateway binds API tokens to the caller's IP.** `POST /auth/token` returns a JWT whose `aud` is the public IP that asked for it, and the gateway enforces it. Serverless functions do not hold one outbound IP, so a merchant's token is rejected at random: 3 of 72 live calls (4%) answered 401 while the calls either side succeeded on the same token. Portal sessions are unaffected — the gateway cookie carries no such binding. The proxy therefore retries a safe call once and never reads a lone 401 as a dead session, which keeps merchants signed in but does not stop the failed call. Raised with the gateway team; the fix is theirs (drop the binding, or allowlist a fixed egress we would then have to buy).
+4. **Vercel hosting.** Add a firewall rate-limit rule on `/api/auth/login`, `/api/auth/verify-login` and `/api/auth/password`. Static IPs are not needed: the gateway is reachable from anywhere over `myghcard.com`. Worth asking whether the API should sit behind its own hostname rather than sharing `myghcard.com:3115`.
+5. **Server-side list filtering.** `GET /transactions` takes only `page` and `size`, so filtering and page totals apply to the loaded page. Reports are filtered server side and carry the full totals.
+6. **No single-record endpoints** for tenants, so tenant details come from the cached list.
 
 ## Deployment
 
