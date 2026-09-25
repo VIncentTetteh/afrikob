@@ -8,7 +8,9 @@ import { CopyButton } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Sheet } from "@/components/ui/sheet";
+import { FirstAdminSheet } from "./first-admin-sheet";
 import { useCreateTenant } from "@/lib/api/hooks";
 import { createTenantSchema, type CreateTenant, type CreateTenantInput } from "@/lib/api/schemas/requests";
 
@@ -21,11 +23,16 @@ const defaults: CreateTenantInput = {
   requestsPerMinute: 60,
 };
 
-/** Onboards a merchant. The gateway returns its first API key once. */
+/**
+ * Onboards a merchant in two steps: the tenant, whose integration key the gateway
+ * returns once, then the first administrator who signs in for them.
+ */
 export function CreateTenantSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const create = useCreateTenant();
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  const [adminFor, setAdminFor] = useState<{ id: string; name: string } | null>(null);
   const form = useForm<CreateTenantInput, unknown, CreateTenant>({ resolver: zodResolver(createTenantSchema), defaultValues: defaults });
   const e = form.formState.errors;
 
@@ -41,9 +48,14 @@ export function CreateTenantSheet({ open, onOpenChange }: { open: boolean; onOpe
     create.mutate(body, {
       onSuccess: (result) => {
         close(false);
+        // A 202 queues the tenant for approval: nothing exists yet to add people to.
+        const tenant = result.data?.tenantId ? { id: result.data.tenantId, name: body.displayName } : null;
         if (result.data?.apiKey) {
           setIssuedKey(result.data.apiKey);
           setAcknowledged(false);
+          setCreated(tenant);
+        } else {
+          setAdminFor(tenant);
         }
       },
     }),
@@ -69,22 +81,22 @@ export function CreateTenantSheet({ open, onOpenChange }: { open: boolean; onOpe
       >
         <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
           <Field label="Code" htmlFor="t-code" error={e.code?.message} hint="Short and unique, e.g. AFIKOB">
-            <Input id="t-code" className="uppercase" {...form.register("code")} />
+            <Input id="t-code" className="font-mono uppercase" autoComplete="off" spellCheck={false} maxLength={20} {...form.register("code")} />
           </Field>
           <Field label="Trading name" htmlFor="t-display" error={e.displayName?.message}>
-            <Input id="t-display" {...form.register("displayName")} />
+            <Input id="t-display" autoComplete="off" maxLength={150} {...form.register("displayName")} />
           </Field>
           <Field label="Registered name" htmlFor="t-legal" error={e.legalName?.message} className="sm:col-span-2">
-            <Input id="t-legal" {...form.register("legalName")} />
+            <Input id="t-legal" autoComplete="off" maxLength={150} {...form.register("legalName")} />
           </Field>
           <Field label="Daily limit (GHS)" htmlFor="t-daily" error={e.dailyLimit?.message} hint="Leave blank for no limit">
-            <Input id="t-daily" type="number" min="0" step="0.01" {...form.register("dailyLimit")} />
+            <MoneyInput id="t-daily" placeholder="No limit" {...form.register("dailyLimit")} />
           </Field>
           <Field label="Per-payment limit (GHS)" htmlFor="t-per" error={e.perTransactionLimit?.message} hint="Leave blank for no limit">
-            <Input id="t-per" type="number" min="0" step="0.01" {...form.register("perTransactionLimit")} />
+            <MoneyInput id="t-per" placeholder="No limit" {...form.register("perTransactionLimit")} />
           </Field>
           <Field label="Requests per minute" htmlFor="t-rpm" error={e.requestsPerMinute?.message} className="sm:col-span-2">
-            <Input id="t-rpm" type="number" min="1" step="1" {...form.register("requestsPerMinute")} />
+            <Input id="t-rpm" inputMode="numeric" autoComplete="off" maxLength={6} {...form.register("requestsPerMinute")} />
           </Field>
         </form>
       </Sheet>
@@ -93,8 +105,15 @@ export function CreateTenantSheet({ open, onOpenChange }: { open: boolean; onOpe
         apiKey={issuedKey}
         acknowledged={acknowledged}
         onAcknowledge={setAcknowledged}
-        onClose={() => setIssuedKey(null)}
+        onClose={() => {
+          setIssuedKey(null);
+          setAdminFor(created);
+          setCreated(null);
+        }}
+        title="Save their integration key"
       />
+
+      <FirstAdminSheet tenantId={adminFor?.id ?? null} tenantName={adminFor?.name} onClose={() => setAdminFor(null)} />
     </>
   );
 }
@@ -120,7 +139,7 @@ export function RevealKeyDialog({
         if (!o && acknowledged) onClose();
       }}
       title={title}
-      description="This is the only time it is shown."
+      description="For the tenant's own systems to call the gateway, not for signing in. This is the only time it is shown."
       footer={
         <Button disabled={!acknowledged} onClick={onClose}>
           Done

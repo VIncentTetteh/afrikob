@@ -6,6 +6,7 @@ import { describeUpstreamError } from "@/lib/server/upstream-error";
 import { allowRequest } from "@/lib/server/rate-limit";
 import { envelopeError, readUpstreamBody, upstreamMessage } from "@/lib/server/respond";
 import { callUpstream } from "@/lib/server/upstream";
+import { emailAddress, newPassword } from "@/lib/validation/fields";
 
 /**
  * Public password-reset relay: forgot-password → verify-code → reset-password.
@@ -14,25 +15,19 @@ import { callUpstream } from "@/lib/server/upstream";
  */
 const ATTEMPTS_PER_WINDOW = 8;
 const WINDOW_MS = 10 * 60 * 1000;
-const MIN_PASSWORD_LENGTH = 8;
-const MAX_PASSWORD_LENGTH = 256;
 const CODE = /^[A-Za-z0-9-]{4,12}$/;
 
-const password = z
-  .string()
-  .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters`)
-  .max(MAX_PASSWORD_LENGTH);
-
 const bodySchema = z.discriminatedUnion("step", [
-  z.object({ step: z.literal("forgot"), env: z.enum(API_ENVIRONMENTS), email: z.email() }),
-  z.object({ step: z.literal("verify"), env: z.enum(API_ENVIRONMENTS), email: z.email(), code: z.string().regex(CODE, "Enter the code from your email") }),
+  z.object({ step: z.literal("forgot"), env: z.enum(API_ENVIRONMENTS), email: emailAddress }),
+  z.object({ step: z.literal("verify"), env: z.enum(API_ENVIRONMENTS), email: emailAddress, code: z.string().regex(CODE, "Enter the code from your email") }),
   z.object({
     step: z.literal("reset"),
     env: z.enum(API_ENVIRONMENTS),
-    email: z.email(),
+    email: emailAddress,
     code: z.string().regex(CODE),
-    newPassword: password,
-    confirmPassword: password,
+    // The same rule the browser applies, so a crafted request cannot set a weak password.
+    newPassword,
+    confirmPassword: z.string().max(128),
   }),
 ]);
 

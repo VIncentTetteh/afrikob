@@ -10,9 +10,7 @@ import { CSRF_HEADER } from "@/lib/session/types";
 
 export type ClientSession = PublicSession & { environments: Environment[] };
 
-export type LoginInput =
-  | { env: Environment; email: string; password: string }
-  | { env: Environment; apiKey: string };
+export type LoginInput = { env: Environment; email: string; password: string };
 
 /** A password accepted, with a one-time code emailed: no session yet. */
 export interface PendingLoginResponse {
@@ -81,6 +79,14 @@ export function useSession() {
     staleTime: SESSION_STALE_MS,
     retry: retrySession,
   });
+}
+
+/**
+ * Whether this person may submit money movements (maker). The gateway enforces
+ * it anyway; hiding the buttons spares them a form that can only be refused.
+ */
+export function useCanMake(): boolean {
+  return useSession().data?.canMake ?? false;
 }
 
 export function useLogin() {

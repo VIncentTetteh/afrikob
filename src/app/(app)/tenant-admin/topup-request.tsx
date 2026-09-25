@@ -3,7 +3,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
+import { CurrencySelect } from "@/components/ui/currency-select";
 import { Field, Input, Select } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Sheet } from "@/components/ui/sheet";
 import { useRequestTopUp } from "@/lib/api/hooks";
 import { topUpSchema, type TopUp, type TopUpInput } from "@/lib/api/schemas/requests";
@@ -53,10 +55,10 @@ export function TopUpRequestSheet({ open, onOpenChange, currency, walletTypes }:
       <form className="space-y-4" noValidate onSubmit={submit}>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Currency" htmlFor="tr-currency" error={errors.currency?.message}>
-            <Input id="tr-currency" className="uppercase" maxLength={3} {...form.register("currency")} />
+            <CurrencySelect id="tr-currency" {...form.register("currency")} />
           </Field>
           <Field label="Amount" htmlFor="tr-amount" error={errors.amount?.message} className="col-span-2">
-            <Input id="tr-amount" type="number" min="0" step="0.01" inputMode="decimal" {...form.register("amount")} />
+            <MoneyInput id="tr-amount" aria-invalid={Boolean(errors.amount) || undefined} {...form.register("amount")} />
           </Field>
         </div>
         {walletTypes.length > 0 && (
@@ -76,7 +78,7 @@ export function TopUpRequestSheet({ open, onOpenChange, currency, walletTypes }:
           error={errors.reference?.message}
           hint="The deposit slip or transfer reference Afrikob should match this against."
         >
-          <Input id="tr-reference" {...form.register("reference")} />
+          <Input id="tr-reference" autoComplete="off" maxLength={100} {...form.register("reference")} />
         </Field>
       </form>
     </Sheet>

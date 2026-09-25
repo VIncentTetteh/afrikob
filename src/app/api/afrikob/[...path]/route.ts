@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logger } from "@/lib/server/logger";
 import { envelopeError, readUpstreamBody } from "@/lib/server/respond";
-import { FORWARDED_HEADERS, matchRoute, mayUse } from "@/lib/server/routes";
+import { FORWARDED_HEADERS, matchRoute, mayUse, type RouteRule } from "@/lib/server/routes";
 import { clearSession, readSession, slideSession, verifyCsrf } from "@/lib/server/session";
 import { callUpstream } from "@/lib/server/upstream";
 import { describeUpstreamError } from "@/lib/server/upstream-error";
 import { mergeCookies, readSetCookies } from "@/lib/session/cookies";
-import { authMode, CSRF_HEADER, type SessionData } from "@/lib/session/types";
+import { CSRF_HEADER, type SessionData } from "@/lib/session/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,18 +16,16 @@ const EXPIRED_MESSAGE = "Your session has expired. Please sign in again.";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
-/** Gateway credentials: portal sessions replay the gateway cookie, API-key sessions send a bearer token. */
+/** The gateway authorises every call by the portal session cookie it set at sign-in. */
 function authHeaders(session: SessionData): Record<string, string> {
-  return session.credential.kind === "cookie"
-    ? { Cookie: session.credential.cookie }
-    : { Authorization: `Bearer ${session.credential.jwt}` };
+  return { Cookie: session.credential.cookie };
 }
 
 /** A cheap read the signed-in role is always entitled to. */
 const PROBE_PATH: Record<SessionData["role"], string> = {
   platform: "admin/tenants",
   "tenant-admin": "tenant-admin/tenant",
-  tenant: "payments/get-all-banks",
+  tenant: "tenant/payments/get-all-banks",
 };
 
 /**
@@ -57,6 +55,31 @@ async function sessionStillAlive(session: SessionData, failedPath: string): Prom
   }
 }
 
+type BodyCheck = { ok: true; body: string | undefined } | { ok: false; message: string; fields: Record<string, string[]> };
+
+/**
+ * Re-validates a write against the same schema the browser used, and forwards
+ * only the parsed result: unknown fields are dropped and values normalised. A
+ * route with no schema takes no body, so none is forwarded.
+ */
+function validateBody(schema: RouteRule["body"], raw: string): BodyCheck {
+  if (!schema) return { ok: true, body: undefined };
+  let json: unknown;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    return { ok: false, message: "The request body is not valid JSON.", fields: {} };
+  }
+  const parsed = schema.safeParse(json);
+  if (parsed.success) return { ok: true, body: JSON.stringify(parsed.data) };
+  const fields: Record<string, string[]> = {};
+  for (const issue of parsed.error.issues) {
+    const key = issue.path.join(".") || "body";
+    (fields[key] ??= []).push(issue.message);
+  }
+  return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the details you entered.", fields };
+}
+
 /** The gateway redirects an unauthenticated API call to its sign-in page. */
 function isUnauthenticated(status: number): boolean {
   return status === 401 || (status >= 300 && status < 400);
@@ -80,10 +103,10 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
   }
   const rule = matchRoute(method, path);
   if (!rule) return envelopeError(404, "Unknown endpoint.", { requestId });
-  if (!mayUse({ role: session.role, mode: authMode(session) }, rule.scope)) {
+  if (!mayUse(session.role, rule.scope)) {
     const message =
       rule.scope === "money"
-        ? "Moving money needs an API key sign-in; an email and password session cannot."
+        ? "Money screens belong to a tenant's own users. Staff see movements through Reports."
         : "Your sign-in does not cover this area.";
     return envelopeError(403, message, { requestId });
   }
@@ -98,8 +121,14 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
 
   let body: string | undefined;
   if (!SAFE_METHODS.has(method)) {
-    body = await request.text();
-    if (body.length > MAX_BODY_BYTES) return envelopeError(413, "Request body too large.", { requestId });
+    const raw = await request.text();
+    if (raw.length > MAX_BODY_BYTES) return envelopeError(413, "Request body too large.", { requestId });
+    const checked = validateBody(rule.body, raw);
+    if (!checked.ok) {
+      logger.warn("proxy refused an invalid body", { requestId, method, route: rule.pattern.source, fields: Object.keys(checked.fields) });
+      return envelopeError(400, checked.message, { requestId, validationErrors: checked.fields });
+    }
+    body = checked.body;
   }
 
   try {
@@ -129,23 +158,6 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
       duration_ms: Date.now() - started,
     });
 
-    // An API-key token is bound to the IP that minted it, and serverless calls
-    // leave from whichever IP their instance has, so a 401 here usually means
-    // "wrong instance", not "dead token" — and the retry and probe go out the
-    // same wrong IP, so they cannot tell the difference. The token's own expiry,
-    // enforced by readSession, is the only reliable end of such a session.
-    // Answer 503 so the client's query retry can land on a working instance.
-    if (isUnauthenticated(upstream.status) && session.credential.kind === "bearer") {
-      await upstream.body?.cancel();
-      logger.warn("gateway refused an API-key call, session kept", {
-        requestId,
-        method,
-        route: rule.pattern.source,
-        upstreamStatus: upstream.status,
-      });
-      return envelopeError(503, "The gateway turned this request away. Please try again.", { requestId });
-    }
-
     // Only 401 means the session is dead. A 403 is this call being refused —
     // signing the person out over it would end a working session.
     if (isUnauthenticated(upstream.status)) {
@@ -172,10 +184,9 @@ async function handler(request: NextRequest, { params }: Ctx): Promise<NextRespo
     }
     // The gateway may rotate its session cookie on any response; keep the newest.
     const rotated = readSetCookies(upstream.headers);
-    const current = session.credential;
-    const credentialChanged = rotated.length > 0 && current.kind === "cookie";
-    if (credentialChanged && current.kind === "cookie") {
-      session.credential = { kind: "cookie", cookie: mergeCookies(current.cookie, rotated) };
+    const credentialChanged = rotated.length > 0;
+    if (credentialChanged) {
+      session.credential = { kind: "cookie", cookie: mergeCookies(session.credential.cookie, rotated) };
     }
     await slideSession(session, credentialChanged);
 

@@ -23,6 +23,13 @@ const AUTH_ROUTES = new Set([
   "portal/auth/reset-password",
 ]);
 
+/**
+ * The unprefixed money endpoints answer only an API-key bearer token, so they
+ * belong to a tenant's own integration; the portal uses the `tenant/` copies and
+ * must never proxy these (ADR-0004).
+ */
+const isIntegrationOnly = (p: string) => p === "transactions" || p.startsWith("transactions/") || p.startsWith("payments/");
+
 interface Operation {
   method: string;
   path: string;
@@ -42,8 +49,24 @@ describe("gateway spec coverage", () => {
   });
 
   it.each(operations.map((o) => [`${o.method} ${o.path}`, o] as const))("%s is implemented", (_label, operation) => {
-    const handled = AUTH_ROUTES.has(operation.path) || matchRoute(operation.method, operation.path) !== null;
+    const handled =
+      AUTH_ROUTES.has(operation.path) ||
+      isIntegrationOnly(operation.path) ||
+      matchRoute(operation.method, operation.path) !== null;
     expect(handled, `${operation.method} /api/v1/${operation.path} is in the spec but not implemented`).toBe(true);
+  });
+
+  it("never proxies an integration-only endpoint", () => {
+    const proxied = operations.filter((o) => isIntegrationOnly(o.path) && matchRoute(o.method, o.path) !== null);
+    expect(proxied.map((o) => `${o.method} ${o.path}`)).toEqual([]);
+  });
+
+  it("gives the portal a tenant/ copy of every integration money endpoint except refunds", () => {
+    const missing = operations
+      .filter((o) => isIntegrationOnly(o.path) && !o.path.includes("refunds"))
+      .filter((o) => matchRoute(o.method, `tenant/${o.path}`) === null)
+      .map((o) => `${o.method} tenant/${o.path}`);
+    expect(missing).toEqual([]);
   });
 
   it("has no rule for an endpoint the gateway no longer offers", () => {

@@ -1,6 +1,6 @@
 # ADR-0003: Three roles, and where held actions live
 
-**Status**: Accepted
+**Status**: Accepted (money-by-credential superseded by ADR-0004)
 **Date**: 2026-09-24
 **Authors**: @vincenttetteh
 **Extends**: ADR-0002 (one session, two gateway credentials)

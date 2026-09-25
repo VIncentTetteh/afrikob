@@ -76,11 +76,11 @@ export function FeesPanel({ tenantId }: { tenantId: string }) {
       >
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Applies to" htmlFor="fee-type" error={form.formState.errors.transactionType?.message}>
-            <Input id="fee-type" list="fee-types" className="uppercase" {...form.register("transactionType")} />
+            <Input id="fee-type" list="fee-types" className="font-mono uppercase" autoComplete="off" spellCheck={false} maxLength={50} {...form.register("transactionType")} />
             <datalist id="fee-types">{SUGGESTED_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
           </Field>
           <Field label="Fee percentage" htmlFor="fee-pct" error={form.formState.errors.percentageFee?.message} hint="Percent of each payment, e.g. 1.5">
-            <Input id="fee-pct" type="number" min="0" max="100" step="0.01" {...form.register("percentageFee")} />
+            <Input id="fee-pct" inputMode="decimal" autoComplete="off" maxLength={6} placeholder="1.50" {...form.register("percentageFee")} />
           </Field>
         </form>
       </Dialog>

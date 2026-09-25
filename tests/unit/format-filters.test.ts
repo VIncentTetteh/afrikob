@@ -22,7 +22,9 @@ describe("format", () => {
   it("formats money, numbers and display values", () => {
     expect(formatMoney(9958.6)).toBe("GHS 9,958.60");
     expect(formatMoney(10, null)).toBe("GHS 10.00");
-    expect(formatMoney(null)).toBe("N/A");
+    expect(formatMoney(null)).toBe("GHS 0.00");
+    expect(formatMoney(undefined, "GHS")).toBe("GHS 0.00");
+    expect(formatMoney(Number.NaN)).toBe("GHS 0.00");
     expect(formatMoney(1, "XXXX")).toBe("1.00");
     expect(formatNumber(1600)).toBe("1,600");
     expect(display(true)).toBe("Yes");
@@ -62,7 +64,7 @@ describe("transaction filters", () => {
 
 describe("nav", () => {
   it("uses longest-prefix matching per role", () => {
-    const tenant = navFor("tenant", "apikey");
+    const tenant = navFor("tenant");
     expect(activeHref("/disbursements/bulk/abc", tenant)).toBe("/disbursements/bulk");
     expect(activeHref("/status-check", tenant)).toBe("/status-check");
     expect(activeHref("/disbursements", tenant)).toBe("/disbursements");
@@ -76,7 +78,8 @@ describe("nav", () => {
     // /transactions and the balance endpoints need tenant context; the gateway
     // refuses them for a staff session, so nothing in the admin nav may lead there.
     const adminHrefs = navFor("platform").flatMap((s) => s.items.map((i) => i.href));
-    expect(adminHrefs.every((href) => href.startsWith("/admin"))).toBe(true);
+    // Staff stay in /admin, apart from the shared integration guide.
+    expect(adminHrefs.every((href) => href.startsWith("/admin") || href === "/developers")).toBe(true);
     expect(adminHrefs).not.toContain("/admin/transactions");
   });
 
@@ -88,14 +91,25 @@ describe("nav", () => {
     }
   });
 
-  it("only offers money screens to an API-key session", () => {
-    // A password session is refused by the gateway on every money endpoint.
-    expect(navFor("tenant", "apikey").length).toBeGreaterThan(0);
-    expect(navFor("tenant", "portal")).toEqual([]);
-    const tenantAdmin = navFor("tenant-admin", "portal").flatMap((s) => s.items.map((i) => i.href));
-    expect(tenantAdmin.every((href) => href.startsWith("/tenant-admin"))).toBe(true);
-    expect(homeFor("tenant", "portal")).toBe("/no-access");
-    expect(homeFor("tenant", "apikey")).toBe("/dashboard");
+  it("gives every tenant user the money screens and the Developers page", () => {
+    for (const role of ["tenant", "tenant-admin"] as const) {
+      const hrefs = navFor(role).flatMap((s) => s.items.map((i) => i.href));
+      expect(hrefs).toEqual(expect.arrayContaining(["/dashboard", "/collections", "/disbursements", "/developers"]));
+    }
+    // Only an administrator gets the organisation screens on top.
+    const plain = navFor("tenant").flatMap((s) => s.items.map((i) => i.href));
+    expect(plain.some((href) => href.startsWith("/tenant-admin"))).toBe(false);
+  });
+
+  it("offers no Refunds screen until the gateway has tenant/ refunds", () => {
+    const hrefs = navFor("tenant-admin").flatMap((s) => s.items.map((i) => i.href));
+    expect(hrefs).not.toContain("/refunds");
+  });
+
+  it("names disbursements the way banks do", () => {
+    const labels = navFor("tenant").flatMap((s) => s.items.map((i) => i.label));
+    expect(labels).toEqual(expect.arrayContaining(["Disbursements", "Bulk disbursements"]));
+    expect(labels.some((label) => /payout/i.test(label))).toBe(false);
   });
 
   it("sends each role to an approvals inbox it can actually open", () => {
@@ -108,17 +122,17 @@ describe("nav", () => {
 
   it("gives every role a home it is allowed to open", () => {
     expect(homeFor("platform")).toBe("/admin");
-    expect(homeFor("tenant-admin")).toBe("/tenant-admin");
+    expect(homeFor("tenant-admin")).toBe("/dashboard");
     expect(homeFor("tenant")).toBe("/dashboard");
     // Each session's home is a destination in its own navigation.
-    for (const [role, mode] of [["platform", "portal"], ["tenant-admin", "portal"], ["tenant", "apikey"]] as const) {
-      const hrefs = navFor(role, mode).flatMap((s) => s.items.map((i) => i.href));
-      expect(hrefs).toContain(homeFor(role, mode));
+    for (const role of ["platform", "tenant-admin", "tenant"] as const) {
+      const hrefs = navFor(role).flatMap((s) => s.items.map((i) => i.href));
+      expect(hrefs).toContain(homeFor(role));
     }
   });
 
   it("gives a tenant admin their own business, not the platform", () => {
-    const hrefs = navFor("tenant-admin", "portal").flatMap((s) => s.items.map((i) => i.href));
+    const hrefs = navFor("tenant-admin").flatMap((s) => s.items.map((i) => i.href));
     expect(hrefs).toEqual(expect.arrayContaining(["/tenant-admin", "/tenant-admin/approvals", "/tenant-admin/people"]));
     expect(hrefs.every((href) => !href.startsWith("/admin"))).toBe(true);
   });

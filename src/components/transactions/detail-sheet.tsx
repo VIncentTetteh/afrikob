@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/panel";
 import { Sheet } from "@/components/ui/sheet";
 import { State } from "@/components/ui/state";
+import { TENANT_REFUNDS_AVAILABLE } from "@/lib/api/features";
 import { useTransaction, useTransactionRefunds } from "@/lib/api/hooks";
 import type { Transaction } from "@/lib/api/schemas/models";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -67,26 +68,28 @@ export function TransactionSheet({ transaction, onOpenChange, onRefund }: Props)
               <KeyValueList items={recordToItems(tx).filter((i) => !SUMMARY_KEYS.has(i.label.replaceAll(" ", "")))} />
             )}
           </section>
-          <section>
-            <h3 className="mb-1 text-sm font-medium">Refunds</h3>
-            {refunds.isLoading ? (
-              <Skeleton className="h-10 w-full" />
-            ) : refunds.data && refunds.data.length > 0 ? (
-              <ul className="divide-y divide-line">
-                {refunds.data.map((r) => (
-                  <li key={r.id} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">
-                    <span>
-                      <span className="figure">{formatMoney(r.amount, r.currency)}</span>
-                      <span className="text-ink-soft"> · {r.reason ?? "No reason given"}</span>
-                    </span>
-                    <State status={r.status} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-ink-soft">None yet.</p>
-            )}
-          </section>
+          {TENANT_REFUNDS_AVAILABLE && (
+            <section>
+              <h3 className="mb-1 text-sm font-medium">Refunds</h3>
+              {refunds.isLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : refunds.data && refunds.data.length > 0 ? (
+                <ul className="divide-y divide-line">
+                  {refunds.data.map((r) => (
+                    <li key={r.id} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">
+                      <span>
+                        <span className="figure">{formatMoney(r.amount, r.currency)}</span>
+                        <span className="text-ink-soft"> · {r.reason ?? "No reason given"}</span>
+                      </span>
+                      <State status={r.status} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-ink-soft">None yet.</p>
+              )}
+            </section>
+          )}
         </div>
       )}
     </Sheet>

@@ -34,16 +34,16 @@ beforeEach(() => {
   );
 });
 
-const payout = {
+const disbursement = {
   clientTransactionId: "c",
   accountNumber: "0241234567",
   institutionCode: "MTN",
   amount: 1,
-  currency: "GHS",
+  currency: "GHS" as const,
   reference: "r",
   accountName: "A",
 };
-const filter = { tenantId: "ten-1", fromDate: "2026-09-01", toDate: "2026-09-30", status: "Successful", currency: "GHS" };
+const filter = { tenantId: "ten-1", fromDate: "2026-09-01", toDate: "2026-09-30", status: "Successful", currency: "GHS" as const };
 const PERSON = {
   email: "a@b.com",
   displayName: "A",
@@ -105,24 +105,24 @@ const cases: [string, () => Promise<unknown>, string, string, string?][] = [
   ["deleteApprovalPolicy", () => adminApi.deleteApprovalPolicy("p1"), "DELETE", "admin/approval-policies/p1"],
   ["refund.listForTransaction", () => refundsApi.listForTransaction("tx1"), "GET", "payments/tx1/refunds"],
   ["refund.get", () => refundsApi.get("r1"), "GET", "payments/refunds/r1"],
-  ["transactions.list", () => transactionsApi.list(2, 50), "GET", "transactions", "?page=2&size=50"],
-  ["transactions.get", () => transactionsApi.get("tx1"), "GET", "transactions/tx1"],
-  ["telcos", () => paymentsApi.telcos(), "GET", "payments/get-all-telcos"],
-  ["banks", () => paymentsApi.banks(), "GET", "payments/get-all-banks"],
-  ["verifyName", () => paymentsApi.verifyName({ accountNumber: "0241234567", institutionCode: "MTN" }), "POST", "payments/verify-name"],
-  ["statusCheck", () => paymentsApi.statusCheck({ clientTransactionId: "c" }), "POST", "payments/status-check"],
-  ["disburse", () => paymentsApi.disburse(payout), "POST", "payments/disbursement"],
-  ["collect", () => paymentsApi.collect({ ...payout, walletNumber: "0241234567", walletName: undefined }), "POST", "payments/collection"],
-  ["disbursementBalance", () => paymentsApi.disbursementBalance("GHS"), "GET", "payments/disbursement-balance", "?currency=GHS"],
-  ["collectionBalance", () => paymentsApi.collectionBalance("GHS"), "GET", "payments/collection-balance", "?currency=GHS"],
+  ["transactions.list", () => transactionsApi.list(2, 50), "GET", "tenant/transactions", "?page=2&size=50"],
+  ["transactions.get", () => transactionsApi.get("tx1"), "GET", "tenant/transactions/tx1"],
+  ["telcos", () => paymentsApi.telcos(), "GET", "tenant/payments/get-all-telcos"],
+  ["banks", () => paymentsApi.banks(), "GET", "tenant/payments/get-all-banks"],
+  ["verifyName", () => paymentsApi.verifyName({ accountNumber: "0241234567", institutionCode: "MTN" }), "POST", "tenant/payments/verify-name"],
+  ["statusCheck", () => paymentsApi.statusCheck({ clientTransactionId: "c" }), "POST", "tenant/payments/status-check"],
+  ["disburse", () => paymentsApi.disburse(disbursement), "POST", "tenant/payments/disbursement"],
+  ["collect", () => paymentsApi.collect({ ...disbursement, walletNumber: "0241234567", walletName: undefined }), "POST", "tenant/payments/collection"],
+  ["disbursementBalance", () => paymentsApi.disbursementBalance("GHS"), "GET", "tenant/payments/disbursement-balance", "?currency=GHS"],
+  ["collectionBalance", () => paymentsApi.collectionBalance("GHS"), "GET", "tenant/payments/collection-balance", "?currency=GHS"],
   ["getWallet (no currency given)", () => adminApi.getWallet("t1"), "GET", "admin/wallets/t1", "?currency=GHS"],
-  ["disbursementBalance (no currency given)", () => paymentsApi.disbursementBalance(), "GET", "payments/disbursement-balance", "?currency=GHS"],
-  ["collectionBalance (no currency given)", () => paymentsApi.collectionBalance(), "GET", "payments/collection-balance", "?currency=GHS"],
-  ["bulkNameVerify", () => paymentsApi.bulkNameVerify({ accounts: [] }), "POST", "payments/bulk-name-verify"],
-  ["listBulk", () => paymentsApi.listBulk(), "GET", "payments/bulk-disbursements"],
-  ["getBulk", () => paymentsApi.getBulk("b1"), "GET", "payments/bulk-disbursements/b1"],
-  ["reconcileBulk", () => paymentsApi.reconcileBulk("b1"), "POST", "payments/bulk-disbursements/b1/reconcile"],
-  ["bulkStatus", () => paymentsApi.bulkStatus({ bulk_transaction_id: "b1" }), "POST", "payments/bulk-disbursement-status"],
+  ["disbursementBalance (no currency given)", () => paymentsApi.disbursementBalance(), "GET", "tenant/payments/disbursement-balance", "?currency=GHS"],
+  ["collectionBalance (no currency given)", () => paymentsApi.collectionBalance(), "GET", "tenant/payments/collection-balance", "?currency=GHS"],
+  ["bulkNameVerify", () => paymentsApi.bulkNameVerify({ accounts: [] }), "POST", "tenant/payments/bulk-name-verify"],
+  ["listBulk", () => paymentsApi.listBulk(), "GET", "tenant/payments/bulk-disbursements"],
+  ["getBulk", () => paymentsApi.getBulk("b1"), "GET", "tenant/payments/bulk-disbursements/b1"],
+  ["reconcileBulk", () => paymentsApi.reconcileBulk("b1"), "POST", "tenant/payments/bulk-disbursements/b1/reconcile"],
+  ["bulkStatus", () => paymentsApi.bulkStatus({ bulk_transaction_id: "b1" }), "POST", "tenant/payments/bulk-disbursement-status"],
   // Approvals, at both scopes
   ["approvals.list (platform)", () => approvalsApi.list("platform", "Pending"), "GET", "admin/approvals", "?status=Pending"],
   ["approvals.get (platform)", () => approvalsApi.get("platform", "apr-1"), "GET", "admin/approvals/apr-1"],
@@ -156,7 +156,7 @@ describe("endpoint contract", () => {
   });
 
   it("sends ClientBatchId on bulk creation", async () => {
-    await paymentsApi.createBulk({ disbursements: [{ ...payout, transactionId: undefined }] }, "BATCH-1").catch(() => undefined);
+    await paymentsApi.createBulk({ disbursements: [{ ...disbursement, transactionId: undefined }] }, "BATCH-1").catch(() => undefined);
     expect(seen[0].headers.clientbatchid).toBe("BATCH-1");
   });
 

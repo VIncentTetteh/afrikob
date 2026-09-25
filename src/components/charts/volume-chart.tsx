@@ -38,9 +38,9 @@ function VolumeTooltip({ active, point }: { active?: boolean; point?: DayPoint }
   if (!active || !point) return null;
   const p = point;
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs shadow-lg">
+    <div className="rounded-xl border border-line bg-paper px-3 py-2 text-xs shadow-lg">
       <p className="font-semibold">{p.label}</p>
-      <p className="text-muted-foreground">
+      <p className="text-ink-soft">
         {formatMoney(p.amount)} · {p.count} txn{p.count === 1 ? "" : "s"}
       </p>
     </div>
@@ -53,7 +53,7 @@ const compact = new Intl.NumberFormat("en-GH", { notation: "compact", maximumFra
 export function VolumeChart({ items }: { items: VolumePoint[] }) {
   const data = useMemo(() => toDailyVolume(items), [items]);
   if (data.length === 0) {
-    return <p className="py-16 text-center text-sm text-muted-foreground">No dated transactions to chart yet.</p>;
+    return <p className="py-16 text-center text-sm text-ink-soft">No dated transactions to chart yet.</p>;
   }
   return (
     <figure>
@@ -61,9 +61,9 @@ export function VolumeChart({ items }: { items: VolumePoint[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap={2}>
             <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-            <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => compact.format(v)} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
-            <Tooltip content={(props) => <VolumeTooltip active={props.active} point={props.payload?.[0]?.payload as DayPoint | undefined} />} cursor={{ fill: "var(--muted)" }} />
+            <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: "var(--ink-soft)", fontSize: 12 }} />
+            <YAxis tickLine={false} axisLine={false} width={48} tickFormatter={(v: number) => compact.format(v)} tick={{ fill: "var(--ink-soft)", fontSize: 12 }} />
+            <Tooltip content={(props) => <VolumeTooltip active={props.active} point={props.payload?.[0]?.payload as DayPoint | undefined} />} cursor={{ fill: "var(--field)" }} />
             <Bar dataKey="amount" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={36} />
           </BarChart>
         </ResponsiveContainer>

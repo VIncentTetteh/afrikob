@@ -3,7 +3,7 @@ import { LedgerPreview } from "./ledger-preview";
 
 const PROOF = [
   { term: "Collections", detail: "Charge a mobile money wallet and watch it settle, cedi by cedi." },
-  { term: "Payouts", detail: "Pay one beneficiary or a thousand, every name checked before the money leaves." },
+  { term: "Disbursements", detail: "Pay one beneficiary or a thousand, every name checked before the money leaves." },
   { term: "Controls", detail: "Maker-checker approvals, per-tenant fees and a refund trail you can audit." },
 ];
 

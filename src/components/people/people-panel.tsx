@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/components/ui/dropdown";
 import { Checkbox, Field, Input, Select } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Sheet } from "@/components/ui/sheet";
 import { State } from "@/components/ui/state";
-import { usePortalUsers, useTenantAdminUsers, useTenantAdminUserMutations, useUserMutations } from "@/lib/api/hooks";
+import { usePortalUser, usePortalUsers, useTenantAdminUsers, useTenantAdminUserMutations, useTenants, useUserMutations } from "@/lib/api/hooks";
 import type { PortalUser } from "@/lib/api/schemas/models";
 import {
   adminSetPasswordSchema,
@@ -75,6 +76,8 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
   const platformUsers = usePortalUsers(tenantId, undefined, isPlatform);
   const tenantUsers = useTenantAdminUsers(!isPlatform);
   const users = isPlatform ? platformUsers : tenantUsers;
+  // Staff choose the tenant from the list rather than typing an id.
+  const tenants = useTenants(isPlatform && !tenantId);
   const platformMutations = useUserMutations();
   const tenantMutations = useTenantAdminUserMutations();
   const { create, update, activate, deactivate, setPassword } = isPlatform ? platformMutations : tenantMutations;
@@ -100,16 +103,19 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
       preferredNotificationChannel: "Email",
     },
   });
+  // Edit what the gateway holds now, not the row loaded with the list.
+  const freshPerson = usePortalUser(scope, editing?.id ?? null);
+  const current = freshPerson.data ?? editing;
   const editForm = useForm<PersonEditFormInput, unknown, PersonEditForm>({
     resolver: zodResolver(personEditFormSchema),
     values: {
-      displayName: editing?.displayName ?? "",
-      canMake: editing?.canMake ?? true,
-      canCheck: editing?.canCheck ?? false,
-      isTenantAdmin: editing?.isTenantAdmin ?? false,
-      isPlatformAdmin: editing?.isPlatformAdmin ?? false,
-      phoneNumber: editing?.phoneNumber ?? "",
-      preferredNotificationChannel: (editing?.preferredNotificationChannel as "Email" | "SMS") ?? "Email",
+      displayName: current?.displayName ?? "",
+      canMake: current?.canMake ?? true,
+      canCheck: current?.canCheck ?? false,
+      isTenantAdmin: current?.isTenantAdmin ?? false,
+      isPlatformAdmin: current?.isPlatformAdmin ?? false,
+      phoneNumber: current?.phoneNumber ?? "",
+      preferredNotificationChannel: (current?.preferredNotificationChannel as "Email" | "SMS") ?? "Email",
     },
   });
   const passwordForm = useForm<AdminSetPassword>({ resolver: zodResolver(adminSetPasswordSchema), defaultValues: { newPassword: "" } });
@@ -288,12 +294,24 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
       >
         <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
           <Field label="Name" htmlFor="p-name" error={createForm.formState.errors.displayName?.message}>
-            <Input id="p-name" {...createForm.register("displayName")} />
+            <Input id="p-name" autoComplete="off" maxLength={100} aria-invalid={Boolean(createForm.formState.errors.displayName) || undefined} {...createForm.register("displayName")} />
           </Field>
           <Field label="Email" htmlFor="p-email" error={createForm.formState.errors.email?.message}>
-            <Input id="p-email" type="email" {...createForm.register("email")} />
+            <Input
+              id="p-email"
+              type="email"
+              inputMode="email"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              maxLength={254}
+              aria-invalid={Boolean(createForm.formState.errors.email) || undefined}
+              {...createForm.register("email")}
+            />
           </Field>
-          {isPlatform && (
+          {/* On a tenant's own page the tenant is fixed, and travels in defaultValues:
+              a disabled field would be dropped from the submitted values. */}
+          {isPlatform && !tenantId && (
             <>
               <Field label="Belongs to" htmlFor="p-type">
                 <Select id="p-type" {...createForm.register("userType")}>
@@ -304,13 +322,36 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
                   ))}
                 </Select>
               </Field>
-              <Field label="Tenant" htmlFor="p-tenant" hint="Required when they belong to a tenant">
-                <Input id="p-tenant" disabled={Boolean(tenantId)} {...createForm.register("tenantId")} />
+              <Field
+                label="Tenant"
+                htmlFor="p-tenant"
+                error={createForm.formState.errors.tenantId?.message}
+                hint="Required when they belong to a tenant"
+              >
+                <Select
+                  id="p-tenant"
+                  disabled={createForm.watch("userType") !== "Tenant"}
+                  aria-invalid={Boolean(createForm.formState.errors.tenantId) || undefined}
+                  {...createForm.register("tenantId")}
+                >
+                  <option value="">{tenants.isLoading ? "Loading tenants…" : "Choose a tenant"}</option>
+                  {(tenants.data ?? []).map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.displayName ?? t.code ?? t.id}
+                    </option>
+                  ))}
+                </Select>
               </Field>
             </>
           )}
-          <Field label="Phone" htmlFor="p-phone" error={createForm.formState.errors.phoneNumber?.message} hint="Optional">
-            <Input id="p-phone" inputMode="tel" {...createForm.register("phoneNumber")} />
+          <Field label="Phone" htmlFor="p-phone" error={createForm.formState.errors.phoneNumber?.message} hint="Optional, unless notified by SMS">
+            <Controller
+              control={createForm.control}
+              name="phoneNumber"
+              render={({ field, fieldState }) => (
+                <PhoneInput id="p-phone" value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} invalid={Boolean(fieldState.error)} />
+              )}
+            />
           </Field>
           {channelField(createForm, "p-channel")}
           <Field
@@ -318,9 +359,9 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
             htmlFor="p-password"
             error={createForm.formState.errors.password?.message}
             className="sm:col-span-2"
-            hint="Share it securely. They can change it from the sign-in page."
+            hint="At least 8 characters with a letter and a number. Share it securely; they can change it from the sign-in page."
           >
-            <Input id="p-password" type="text" autoComplete="off" {...createForm.register("password")} />
+            <Input id="p-password" type="text" autoComplete="new-password" spellCheck={false} maxLength={128} {...createForm.register("password")} />
           </Field>
           <div className="space-y-2 sm:col-span-2">
             <FlagField control={createForm.control} name="canMake" label="Can submit actions" />
@@ -364,10 +405,16 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
       >
         <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" noValidate>
           <Field label="Name" htmlFor="pe-name" error={editForm.formState.errors.displayName?.message}>
-            <Input id="pe-name" {...editForm.register("displayName")} />
+            <Input id="pe-name" autoComplete="off" maxLength={100} {...editForm.register("displayName")} />
           </Field>
           <Field label="Phone" htmlFor="pe-phone" error={editForm.formState.errors.phoneNumber?.message}>
-            <Input id="pe-phone" inputMode="tel" {...editForm.register("phoneNumber")} />
+            <Controller
+              control={editForm.control}
+              name="phoneNumber"
+              render={({ field, fieldState }) => (
+                <PhoneInput id="pe-phone" value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} invalid={Boolean(fieldState.error)} />
+              )}
+            />
           </Field>
           {channelField(editForm, "pe-channel")}
           <div className="space-y-2 sm:col-span-2">
@@ -420,9 +467,9 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
           label="New password"
           htmlFor="p-newpassword"
           error={passwordForm.formState.errors.newPassword?.message}
-          hint="Share it securely and ask them to change it."
+          hint="At least 8 characters with a letter and a number. Share it securely and ask them to change it."
         >
-          <Input id="p-newpassword" type="text" autoComplete="off" {...passwordForm.register("newPassword")} />
+          <Input id="p-newpassword" type="text" autoComplete="new-password" spellCheck={false} maxLength={128} {...passwordForm.register("newPassword")} />
         </Field>
       </Dialog>
 

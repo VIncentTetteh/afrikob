@@ -19,7 +19,7 @@ interface Props {
   onStartOver: () => void;
 }
 
-/** Step two of staff sign-in: nothing is signed in until this code checks out. */
+/** Step two of sign-in: nothing is signed in until this code checks out. */
 export function VerifyStep({ maskedEmail, onVerified, onStartOver }: Props) {
   const verify = useVerifyLoginCode();
   const form = useForm<VerifyCode>({ resolver: zodResolver(verifyCodeSchema), defaultValues: { code: "" } });

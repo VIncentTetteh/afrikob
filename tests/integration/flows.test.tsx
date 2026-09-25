@@ -8,10 +8,13 @@ import { renderWithClient } from "../utils";
 import AdminOverviewPage from "@/app/(app)/admin/page";
 import AdminRefundsPage from "@/app/(app)/admin/refunds/page";
 import ReportsPage from "@/app/(app)/admin/reports/page";
+import DisbursementsPage from "@/app/(app)/disbursements/page";
 import { BulkUploader } from "@/app/(app)/disbursements/bulk/uploader";
 import { SignInForm } from "@/app/(auth)/signin/signin-form";
+import { ReportView } from "@/components/admin/report-view";
+import { ApprovalsInbox } from "@/components/approvals/approvals-inbox";
 import { PeoplePanel } from "@/components/people/people-panel";
-import { PayoutSheet } from "@/components/payments/disbursement-dialog";
+import { DisbursementSheet } from "@/components/payments/disbursement-dialog";
 import { LedgerView } from "@/components/transactions/ledger-view";
 
 const replace = vi.fn();
@@ -24,7 +27,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => searchParams,
 }));
 
-const adminSession = { role: "platform", env: "test", tenantId: null, userId: "usr-1", label: "Doris", canMake: true, canCheck: true, exp: 0, mode: "portal", environments: ["test"] };
+const adminSession = { role: "platform", env: "test", tenantId: null, userId: "usr-1", label: "Doris", canMake: true, canCheck: true, exp: 0, environments: ["test"] };
 
 function mockSession(overrides: Record<string, unknown> = {}) {
   server.use(http.get("*/api/auth/session", () => HttpResponse.json({ ...adminSession, ...overrides })));
@@ -42,7 +45,7 @@ describe("Sign in", () => {
       }),
       http.post("*/api/auth/verify-login", async ({ request }) => {
         verifyBody = await request.json();
-        return HttpResponse.json({ ...portalUser, role: "platform", mode: "portal" });
+        return HttpResponse.json({ ...portalUser, role: "platform" });
       }),
     );
     renderWithClient(<SignInForm environments={["test"]} />);
@@ -82,14 +85,26 @@ describe("Sign in", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it("switches to the API key tab for merchants and reports a rejected key", async () => {
+  it("signs a tenant user in with a password too, and offers no API-key sign-in", async () => {
     const user = userEvent.setup();
-    server.use(http.post("*/api/auth/login", () => HttpResponse.json(failure("This API key was not accepted."), { status: 401 })));
+    server.use(
+      http.post("*/api/auth/login", () =>
+        HttpResponse.json({ requiresVerification: true, maskedEmail: "a***@shop.gh", expiresIn: 600 }),
+      ),
+      http.post("*/api/auth/verify-login", () =>
+        HttpResponse.json({ ...portalUser, role: "tenant", tenantId: "ten-1", label: "Ama Mensah" }),
+      ),
+    );
     renderWithClient(<SignInForm environments={["test"]} />);
-    await user.click(screen.getByRole("tab", { name: /Merchant/ }));
-    await user.type(screen.getByLabelText("API key"), "tenant_key_0001");
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("API key")).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Email"), "ama@shop.gh");
+    await user.type(screen.getByLabelText("Password"), "correct horse");
     await user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("This API key was not accepted.");
+    await user.type(await screen.findByLabelText("One-time code"), "654321");
+    await user.click(screen.getByRole("button", { name: /Verify and sign in/ }));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
   });
 
   it("validates the email before calling the gateway", async () => {
@@ -110,39 +125,40 @@ describe("Ledger", () => {
     expect(within(settled).getByText("1")).toBeInTheDocument();
   });
 
-  it("opens a record in the side sheet with its refunds", async () => {
+  it("opens a record in the side sheet", async () => {
     const user = userEvent.setup();
     renderWithClient(<LedgerView title="Transactions" description="d" noun="Transactions" heroLabel="Settled" />);
     const rows = await screen.findAllByText(/Kofi Boateng/);
     await user.click(rows[0]);
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByText("GHS 25.50")).toBeInTheDocument();
-    expect(await within(sheet).findByText("None yet.")).toBeInTheDocument();
+    // The gateway has no tenant/ refunds yet, so the sheet neither asks nor offers.
+    expect(within(sheet).queryByRole("heading", { name: "Refunds" })).not.toBeInTheDocument();
   });
 
   it("shows an error state with a retry", async () => {
-    server.use(http.get("*/api/afrikob/transactions", () => HttpResponse.json(failure("Access denied"), { status: 403 })));
+    server.use(http.get("*/api/afrikob/tenant/transactions", () => HttpResponse.json(failure("Access denied"), { status: 403 })));
     renderWithClient(<LedgerView title="Transactions" description="d" noun="Transactions" heroLabel="Settled" />);
     expect(await screen.findByText("Access denied")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
 });
 
-describe("Payouts", () => {
+describe("Disbursements", () => {
   it("checks the name, confirms, then sends", async () => {
     const user = userEvent.setup();
     let submitted: unknown = null;
     server.use(
-      http.post("*/api/afrikob/payments/disbursement", async ({ request }) => {
+      http.post("*/api/afrikob/tenant/payments/disbursement", async ({ request }) => {
         submitted = await request.json();
         return HttpResponse.json(envelope({ transactionId: "tx-new", status: "Pending", code: "000", message: "Accepted" }));
       }),
     );
-    renderWithClient(<PayoutSheet open onOpenChange={() => {}} />);
+    renderWithClient(<DisbursementSheet open onOpenChange={() => {}} />);
     const institution = await screen.findByLabelText("Institution");
     await waitFor(() => expect(institution).not.toBeDisabled());
     await user.selectOptions(institution, "GCB");
-    await user.type(screen.getByLabelText("Account or wallet number"), "851274680");
+    await user.type(screen.getByLabelText("Account number"), "851274680");
     await user.click(screen.getByRole("button", { name: "Check name" }));
     await waitFor(() => expect(screen.getByLabelText("Account name")).toHaveValue("KOFI BOATENG"));
     await user.type(screen.getByLabelText("Amount (GHS)"), "25");
@@ -150,28 +166,90 @@ describe("Payouts", () => {
     await user.click(screen.getByRole("button", { name: "Review" }));
     await user.click(await screen.findByRole("button", { name: "Send money" }));
     const sheet = await screen.findByRole("dialog");
-    expect(await within(sheet).findByText("Payout submitted")).toBeInTheDocument();
+    // "Pending" from the gateway is accepted, not done: the panel says so.
+    expect(await within(sheet).findByText("Disbursement accepted, waiting for the provider")).toBeInTheDocument();
     expect(submitted).toMatchObject({ accountNumber: "851274680", institutionCode: "GCB", amount: 25, accountName: "KOFI BOATENG" });
   });
 
-  it("will not review an incomplete payout", async () => {
+  it("reports a disbursement the gateway failed as failed, not submitted", async () => {
     const user = userEvent.setup();
-    renderWithClient(<PayoutSheet open onOpenChange={() => {}} />);
+    server.use(
+      http.post("*/api/afrikob/tenant/payments/disbursement", () =>
+        HttpResponse.json({ ...envelope({ transactionId: "tx-bad", status: "Failed", message: "Account closed" }), statusCode: 1 }),
+      ),
+    );
+    renderWithClient(<DisbursementSheet open onOpenChange={() => {}} />);
+    const institution = await screen.findByLabelText("Institution");
+    await waitFor(() => expect(institution).not.toBeDisabled());
+    await user.selectOptions(institution, "GCB");
+    await user.type(screen.getByLabelText("Account number"), "851274680");
+    await user.type(screen.getByLabelText("Account name"), "Kofi Boateng");
+    await user.type(screen.getByLabelText("Amount (GHS)"), "25");
+    await user.type(screen.getByLabelText("Reference"), "Invoice 8");
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    await user.click(await screen.findByRole("button", { name: "Send money" }));
+    const sheet = await screen.findByRole("dialog");
+    expect(await within(sheet).findByText("Disbursement failed")).toBeInTheDocument();
+    expect(within(sheet).getByRole("alert")).toHaveTextContent("Account closed");
+  });
+
+  it("pays a mobile wallet in national form, and refuses more than the balance", async () => {
+    const user = userEvent.setup();
+    let submitted: Record<string, unknown> | null = null;
+    server.use(
+      http.post("*/api/afrikob/tenant/payments/disbursement", async ({ request }) => {
+        submitted = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json(envelope({ transactionId: "tx-w", status: "Successful" }));
+      }),
+    );
+    renderWithClient(<DisbursementSheet open onOpenChange={() => {}} />);
+    const institution = await screen.findByLabelText("Institution");
+    await waitFor(() => expect(institution).not.toBeDisabled());
+    await user.selectOptions(institution, "MTN");
+    await user.type(await screen.findByLabelText("Wallet number"), "24 123 4567");
+    await user.type(screen.getByLabelText("Account name"), "Ama Mensah");
+    await user.type(screen.getByLabelText("Reference"), "Refund 9");
+
+    // The balance fixture holds GHS 9,958.60.
+    await user.type(screen.getByLabelText("Amount (GHS)"), "10000");
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(await screen.findByText(/more than the GHS 9,958.60 available/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send money" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.clear(screen.getByLabelText("Amount (GHS)"));
+    await user.type(screen.getByLabelText("Amount (GHS)"), "12.50");
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    await user.click(await screen.findByRole("button", { name: "Send money" }));
+    await waitFor(() => expect(submitted).toMatchObject({ accountNumber: "0241234567", institutionCode: "MTN", amount: 12.5 }));
+  });
+
+  it("rejects an amount with more than two decimals or an exponent", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<DisbursementSheet open onOpenChange={() => {}} />);
+    await user.type(await screen.findByLabelText("Amount (GHS)"), "1e3");
+    await user.click(screen.getByRole("button", { name: "Review" }));
+    expect(await screen.findByText("Use a number with at most 2 decimal places")).toBeInTheDocument();
+  });
+
+  it("will not review an incomplete disbursement", async () => {
+    const user = userEvent.setup();
+    renderWithClient(<DisbursementSheet open onOpenChange={() => {}} />);
     await user.click(await screen.findByRole("button", { name: "Review" }));
     expect(await screen.findByText("Institution is required")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send money" })).not.toBeInTheDocument();
   });
 });
 
-describe("Bulk payouts", () => {
+describe("Bulk disbursements", () => {
   it("flags bad rows and sends only the valid ones", async () => {
     const user = userEvent.setup();
     let captured: { body: { disbursements: unknown[] }; batch: string | null } | null = null;
     server.use(
-      http.post("*/api/afrikob/payments/bulk-name-verify", () =>
+      http.post("*/api/afrikob/tenant/payments/bulk-name-verify", () =>
         HttpResponse.json(envelope({ results: [{ accountName: "AMA MENSAH", accountNumber: "0241234567", status: "ok", message: null }] })),
       ),
-      http.post("*/api/afrikob/payments/bulk-disbursements", async ({ request }) => {
+      http.post("*/api/afrikob/tenant/payments/bulk-disbursements", async ({ request }) => {
         captured = { body: (await request.json()) as { disbursements: unknown[] }, batch: request.headers.get("clientbatchid") };
         return HttpResponse.json(envelope({ id: "B-42", status: "Queued", itemCount: 1, totalAmount: 10, currency: "GHS" }));
       }),
@@ -236,7 +314,8 @@ describe("Admin refunds", () => {
     await user.click((await screen.findAllByRole("button", { name: "Refund actions" }))[0]);
     expect(await screen.findByRole("menuitem", { name: /Approve/ })).toHaveAttribute("data-disabled");
     expect(screen.getByRole("menuitem", { name: /Reject/ })).toHaveAttribute("data-disabled");
-  });
+    // The refunds page renders a full ledger; on a loaded CI runner it can pass 5s.
+  }, 15_000);
 });
 
 describe("Admin people", () => {
@@ -254,7 +333,7 @@ describe("Admin people", () => {
     const sheet = await screen.findByRole("dialog");
     await user.type(within(sheet).getByLabelText("Name"), "Yaw Owusu");
     await user.type(within(sheet).getByLabelText("Email"), "yaw@afrikob.com");
-    await user.type(within(sheet).getByLabelText("Temporary password"), "first-password");
+    await user.type(within(sheet).getByLabelText("Temporary password"), "first-password1");
     await user.click(within(sheet).getByLabelText("Can approve what others submit"));
     await user.click(within(sheet).getByRole("button", { name: "Add person" }));
     await waitFor(() =>
@@ -338,5 +417,77 @@ describe("Reports", () => {
     await user.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(lastSearch).toContain("tenantId=ten-1"));
     expect(lastSearch).toContain("fromDate=2026-09-01");
+  });
+
+  it("locks a tenant's Transactions tab to that tenant, whatever the filters", async () => {
+    const user = userEvent.setup();
+    const searches: string[] = [];
+    server.use(
+      http.get("*/api/afrikob/admin/reports/collections/list", ({ request }) => {
+        searches.push(new URL(request.url).search);
+        return HttpResponse.json(envelope([]));
+      }),
+    );
+    renderWithClient(<ReportView tenantId="ten-2" />);
+    await waitFor(() => expect(searches[0]).toContain("tenantId=ten-2"));
+    expect(screen.queryByLabelText("Tenant")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.type(screen.getByLabelText("From"), "2026-09-01");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(searches.at(-1)).toContain("fromDate=2026-09-01"));
+    expect(searches.every((q) => q.includes("tenantId=ten-2"))).toBe(true);
+  });
+});
+
+describe("Tenant approval requests", () => {
+  it("shows staff only the requests from the tenant they are looking at", async () => {
+    mockSession();
+    server.use(
+      http.get("*/api/afrikob/admin/approvals", () =>
+        HttpResponse.json(
+          envelope([
+            { id: "apr-a", actionKey: "WALLET_TOPUP", tenantId: "ten-1", status: "Pending", requestedBy: "ama@one.gh", createdAt: "2026-09-20T10:00:00Z" },
+            { id: "apr-b", actionKey: "DISBURSEMENT", tenantId: "ten-2", status: "Pending", requestedBy: "kofi@two.gh", createdAt: "2026-09-21T10:00:00Z" },
+          ]),
+        ),
+      ),
+    );
+    renderWithClient(<ApprovalsInbox scope="platform" tenantId="ten-2" description="d" />);
+    expect((await screen.findAllByText("kofi@two.gh")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("ama@one.gh")).not.toBeInTheDocument();
+  });
+});
+
+/** Maker-checker: someone who may only approve is not offered forms the gateway would refuse. */
+describe("Who may submit", () => {
+  const tenantUser = { role: "tenant", tenantId: "ten-1", label: "Ama" };
+
+  it("offers Send money to a tenant user who may submit, but no refunds until the gateway has them", async () => {
+    const user = userEvent.setup();
+    mockSession({ ...tenantUser, canMake: true });
+    const page = renderWithClient(<DisbursementsPage />);
+    expect(await screen.findByRole("button", { name: /Send money/ })).toBeInTheDocument();
+    page.unmount();
+
+    renderWithClient(<LedgerView title="Collections" description="d" kind="collection" noun="Collections" heroLabel="Collected" allowRefunds />);
+    const [actions] = await screen.findAllByRole("button", { name: "Record actions" });
+    await user.click(actions);
+    expect(await screen.findByRole("menuitem", { name: /Open record/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Request refund/ })).not.toBeInTheDocument();
+  });
+
+  it("hides them from someone who may only approve", async () => {
+    const user = userEvent.setup();
+    mockSession({ ...tenantUser, canMake: false });
+    const page = renderWithClient(<DisbursementsPage />);
+    expect(await screen.findByRole("heading", { name: "Disbursements" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Send money/ })).not.toBeInTheDocument());
+    page.unmount();
+
+    renderWithClient(<LedgerView title="Collections" description="d" kind="collection" noun="Collections" heroLabel="Collected" allowRefunds />);
+    const [actions] = await screen.findAllByRole("button", { name: "Record actions" });
+    await user.click(actions);
+    expect(await screen.findByRole("menuitem", { name: /Open record/ })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Request refund/ })).not.toBeInTheDocument();
   });
 });

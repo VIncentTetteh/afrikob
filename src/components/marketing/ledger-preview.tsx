@@ -11,7 +11,7 @@ interface Row {
 const ROWS: Row[] = [
   { name: "Ama Mensah", detail: "MTN · 024****567", amount: "+GHS 1,250.00", state: "settled", direction: "in" },
   { name: "Kofi Boateng", detail: "GCB · 851****680", amount: "−GHS 4,800.00", state: "in flight", direction: "out" },
-  { name: "Payroll · 128 people", detail: "Bulk payout", amount: "−GHS 96,400.00", state: "settled", direction: "out" },
+  { name: "Payroll · 128 people", detail: "Bulk disbursement", amount: "−GHS 96,400.00", state: "settled", direction: "out" },
   { name: "Esi Owusu", detail: "Telecel · 055****111", amount: "+GHS 320.00", state: "failed", direction: "in" },
 ];
 
@@ -39,7 +39,7 @@ export function LedgerPreview({ className }: { className?: string }) {
     >
       <div className="flex items-end justify-between gap-4 border-b border-white/12 px-5 py-4">
         <div>
-          <p className="text-xs text-pitch-soft">Available to pay out</p>
+          <p className="text-xs text-pitch-soft">Available to disburse</p>
           <p className="figure mt-0.5 text-[1.75rem] leading-none">GHS 1,284,905.40</p>
         </div>
         <p className="text-xs text-pitch-soft">

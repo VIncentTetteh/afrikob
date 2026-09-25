@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 const SESSION = {
   role: "platform", env: "test", tenantId: null, userId: "usr-1", label: "Doris",
-  canMake: true, canCheck: true, exp: 0, mode: "portal", environments: ["test"],
+  canMake: true, canCheck: true, exp: 0, environments: ["test"],
 };
 
 beforeEach(() => replace.mockClear());

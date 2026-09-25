@@ -13,7 +13,7 @@ export function DropdownContent({ children, align = "end" }: { children: ReactNo
       <M.Content
         align={align}
         sideOffset={6}
-        className="z-50 min-w-44 rounded-xl border border-border bg-card p-1 text-sm shadow-lg"
+        className="z-[60] min-w-44 max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-paper p-1 text-sm shadow-lg"
       >
         {children}
       </M.Content>
@@ -37,8 +37,8 @@ export function DropdownItem({
       disabled={disabled}
       onSelect={onSelect}
       className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-muted [&_svg]:size-4",
-        destructive && "text-danger",
+        "flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 outline-none data-[disabled]:opacity-50 data-[highlighted]:bg-field [&_svg]:size-4",
+        destructive && "text-failed",
       )}
     >
       {children}
@@ -60,15 +60,15 @@ export function DropdownCheckbox({
       checked={checked}
       onCheckedChange={onCheckedChange}
       onSelect={(e) => e.preventDefault()}
-      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 outline-none data-[highlighted]:bg-muted"
+      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 outline-none data-[highlighted]:bg-field"
     >
-      <span className={cn("size-4 rounded border border-border", checked && "border-primary bg-primary")} aria-hidden />
+      <span className={cn("size-4 rounded border border-line", checked && "border-accent bg-accent")} aria-hidden />
       {children}
     </M.CheckboxItem>
   );
 }
 
 export const DropdownLabel = ({ children }: { children: ReactNode }) => (
-  <M.Label className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</M.Label>
+  <M.Label className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">{children}</M.Label>
 );
-export const DropdownSeparator = () => <M.Separator className="my-1 h-px bg-border" />;
+export const DropdownSeparator = () => <M.Separator className="my-1 h-px bg-line" />;

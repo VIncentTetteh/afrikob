@@ -8,7 +8,7 @@ export const ENVELOPE_FAILURE_CODE = 1;
 export function envelopeError(
   status: number,
   message: string,
-  extra: { requestId?: string; errors?: string[] } = {},
+  extra: { requestId?: string; errors?: string[]; validationErrors?: Record<string, string[]> } = {},
 ): NextResponse {
   return NextResponse.json(
     {
@@ -18,7 +18,7 @@ export function envelopeError(
       transactionReference: null,
       timestamp: new Date().toISOString(),
       errors: extra.errors ?? [],
-      validationErrors: null,
+      validationErrors: extra.validationErrors ?? null,
       metadata: extra.requestId ? { requestId: extra.requestId } : {},
     },
     { status, headers: extra.requestId ? { "x-request-id": extra.requestId } : undefined },

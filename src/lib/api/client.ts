@@ -99,15 +99,22 @@ async function send(
   });
 }
 
-/**
- * Typed request through the BFF proxy. Unwraps the gateway envelope, validates
- * `data`, and reports a maker-checker 202 as a pending result rather than data.
- */
-export async function requestResult<S extends z.ZodType>(
+/** What the gateway said alongside a payload, kept for money movements. */
+export interface GatewayMeta {
+  httpStatus: number;
+  /** Envelope StatusCode: 0 is success, 1 failure; 2-7 are undocumented. */
+  statusCode: number | null;
+  message: string | null;
+}
+
+/** A held action (maker-checker 202), or the payload with what the gateway said about it. */
+export type Executed<T> = { pending: PendingApproval } | { data: T; meta: GatewayMeta };
+
+async function execute<S extends z.ZodType>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   opts: RequestOptions<S>,
-): Promise<Result<z.infer<S>>> {
+): Promise<Executed<z.infer<S>>> {
   const res = await send(method, path, opts);
   const requestId = res.headers.get("x-request-id");
   const text = res.status === 204 ? "" : await res.text();
@@ -126,10 +133,12 @@ export async function requestResult<S extends z.ZodType>(
   const pending = res.status === 202 ? readPending(body) : null;
   if (pending) return { pending };
 
-  if (isEnvelope(body) && body.statusCode != null && Number(body.statusCode) !== STATUS_CODE_SUCCESS) {
+  const statusCode = isEnvelope(body) && body.statusCode != null && Number.isFinite(Number(body.statusCode)) ? Number(body.statusCode) : null;
+  if (statusCode !== null && statusCode !== STATUS_CODE_SUCCESS) {
     // A non-success code with no payload is a failure; with a payload it is
-    // extra information (for example a queued transaction), so let it through.
-    if (body.data === null || body.data === undefined) throw toApiError(422, body, requestId);
+    // extra information (for example a queued transaction), so let it through
+    // and let the caller read `meta`.
+    if (isEnvelope(body) && (body.data === null || body.data === undefined)) throw toApiError(422, body, requestId);
   }
 
   const payload = isEnvelope(body) ? (body.data ?? null) : body;
@@ -142,7 +151,35 @@ export async function requestResult<S extends z.ZodType>(
       requestId,
     });
   }
-  return { data: parsed.data };
+  return {
+    data: parsed.data,
+    meta: { httpStatus: res.status, statusCode, message: isEnvelope(body) ? (body.message ?? null) : null },
+  };
+}
+
+/**
+ * Typed request through the BFF proxy. Unwraps the gateway envelope, validates
+ * `data`, and reports a maker-checker 202 as a pending result rather than data.
+ */
+export async function requestResult<S extends z.ZodType>(
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  opts: RequestOptions<S>,
+): Promise<Result<z.infer<S>>> {
+  const result = await execute(method, path, opts);
+  return "pending" in result ? { pending: result.pending } : { data: result.data };
+}
+
+/**
+ * For money movements: the payload together with what the gateway said about
+ * it, so a "Failed" or queued payment is never shown as a plain success.
+ */
+export async function requestOutcome<S extends z.ZodType>(
+  method: "POST",
+  path: string,
+  opts: RequestOptions<S>,
+): Promise<Executed<z.infer<S>>> {
+  return execute(method, path, opts);
 }
 
 /** Same as requestResult, but a pending-approval response is surfaced as an error. */

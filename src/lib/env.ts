@@ -23,6 +23,13 @@ const envSchema = z
      * myghcard.com, so without this Node rejects it (ERR_TLS_CERT_ALTNAME_INVALID).
      */
     AFRIKOB_TLS_SERVERNAME: optionalText,
+    /**
+     * The gateway address shown to tenants on the Developers page, per environment.
+     * Optional: without it the upstream URL is shown, with a bare IP swapped for
+     * AFRIKOB_TLS_SERVERNAME so integrators get a name their TLS client accepts.
+     */
+    AFRIKOB_PUBLIC_API_URL_TEST: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.url().optional()),
+    AFRIKOB_PUBLIC_API_URL_LIVE: z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.url().optional()),
     AFRIKOB_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_TIMEOUT_MS),
     /** Lifetime of a portal (email/password) session; keep at or below the gateway's idle timeout. */
     AFRIKOB_PORTAL_SESSION_MINUTES: z.coerce
@@ -66,4 +73,19 @@ export function apiBaseUrl(environment: ApiEnvironment): string {
   const url = environment === "test" ? env.AFRIKOB_API_URL_TEST : env.AFRIKOB_API_URL_LIVE;
   if (!url) throw new Error(`No upstream URL configured for environment "${environment}"`);
   return url.replace(/\/+$/, "");
+}
+
+const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+
+/**
+ * The gateway base URL (no trailing slash) a tenant's own systems should call.
+ * Never secret, but only derived on the server so the upstream stays configurable.
+ */
+export function publicApiUrl(environment: ApiEnvironment): string {
+  const env = serverEnv();
+  const explicit = environment === "test" ? env.AFRIKOB_PUBLIC_API_URL_TEST : env.AFRIKOB_PUBLIC_API_URL_LIVE;
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const url = new URL(apiBaseUrl(environment));
+  if (IPV4.test(url.hostname) && env.AFRIKOB_TLS_SERVERNAME) url.hostname = env.AFRIKOB_TLS_SERVERNAME;
+  return url.toString().replace(/\/+$/, "");
 }

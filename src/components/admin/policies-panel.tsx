@@ -10,9 +10,9 @@ import { Ledger } from "@/components/ledger/ledger";
 import { ConfirmDialog } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Checkbox, Field, Input } from "@/components/ui/input";
+import { Checkbox, Field, Input, Select } from "@/components/ui/input";
 import { State } from "@/components/ui/state";
-import { useApprovalPolicies, usePolicyMutations } from "@/lib/api/hooks";
+import { useApprovalPolicies, usePolicyMutations, useTenants } from "@/lib/api/hooks";
 import type { ApprovalPolicy } from "@/lib/api/schemas/models";
 import { upsertApprovalPolicySchema, type UpsertApprovalPolicy, type UpsertApprovalPolicyInput } from "@/lib/api/schemas/requests";
 import { display } from "@/lib/format";
@@ -22,6 +22,7 @@ const SUGGESTED_ACTIONS = ["DISBURSEMENT", "BULK_DISBURSEMENT", "REFUND", "WALLE
 /** Maker-checker rules, optionally scoped to one tenant. */
 export function PoliciesPanel({ tenantId, showHeader = true }: { tenantId?: string; showHeader?: boolean }) {
   const policies = useApprovalPolicies(tenantId);
+  const tenants = useTenants(!tenantId);
   const { upsert, remove } = usePolicyMutations();
   const [editing, setEditing] = useState<UpsertApprovalPolicyInput | null>(null);
   const [deleting, setDeleting] = useState<ApprovalPolicy | null>(null);
@@ -82,14 +83,25 @@ export function PoliciesPanel({ tenantId, showHeader = true }: { tenantId?: stri
       >
         <form onSubmit={submit} className="space-y-4" noValidate>
           <Field label="Action" htmlFor="pol-action" error={form.formState.errors.actionKey?.message}>
-            <Input id="pol-action" list="pol-actions" className="font-mono uppercase" {...form.register("actionKey")} />
+            <Input id="pol-action" list="pol-actions" className="font-mono uppercase" autoComplete="off" spellCheck={false} maxLength={50} {...form.register("actionKey")} />
             <datalist id="pol-actions">{SUGGESTED_ACTIONS.map((a) => <option key={a} value={a} />)}</datalist>
           </Field>
-          <Field label="Tenant" htmlFor="pol-tenant" hint="Leave blank to apply to every tenant" error={form.formState.errors.tenantId?.message}>
-            <Input id="pol-tenant" disabled={Boolean(tenantId)} {...form.register("tenantId")} />
-          </Field>
-          <Field label="Approvals needed" htmlFor="pol-count" error={form.formState.errors.requiredApprovals?.message}>
-            <Input id="pol-count" type="number" min="1" max="10" {...form.register("requiredApprovals")} />
+          {/* On a tenant's page the rule is theirs, carried in the form values: a
+              disabled field is dropped on submit and would make the rule global. */}
+          {!tenantId && (
+            <Field label="Applies to" htmlFor="pol-tenant" error={form.formState.errors.tenantId?.message}>
+              <Select id="pol-tenant" {...form.register("tenantId")}>
+                <option value="">Every tenant</option>
+                {(tenants.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.displayName ?? t.code ?? t.id}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field label="Approvals needed" htmlFor="pol-count" error={form.formState.errors.requiredApprovals?.message} hint="From 1 to 10">
+            <Input id="pol-count" inputMode="numeric" autoComplete="off" maxLength={2} {...form.register("requiredApprovals")} />
           </Field>
           <Controller control={form.control} name="isEnabled" render={({ field }) => <Checkbox label="Rule is on" checked={Boolean(field.value)} onChange={(e) => field.onChange(e.target.checked)} />} />
           <Controller control={form.control} name="allowRequesterToApprove" render={({ field }) => <Checkbox label="The person who submits may also approve" checked={Boolean(field.value)} onChange={(e) => field.onChange(e.target.checked)} />} />

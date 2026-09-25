@@ -24,7 +24,6 @@ const session = {
   canMake: true,
   canCheck: true,
   exp: 0,
-  mode: "portal",
   environments: ["test"],
 };
 
@@ -64,9 +63,33 @@ describe("Approvals inbox", () => {
     renderWithClient(<ApprovalsInbox scope="platform" description="d" />);
     await user.click((await screen.findAllByRole("button", { name: "Request actions" }))[0]);
     await user.click(await screen.findByRole("menuitem", { name: /Approve/ }));
-    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Approve" }));
+    const confirm = within(await screen.findByRole("dialog")).getByRole("button", { name: "Approve" });
+    // The request is read again before anyone may decide it.
+    await waitFor(() => expect(confirm).toBeEnabled());
+    await user.click(confirm);
     await waitFor(() => expect(decided).toEqual({ approve: true, comment: undefined }));
     await waitFor(() => expect(listCalls).toBeGreaterThan(1));
+  });
+
+  it("will not decide a request someone else already decided", async () => {
+    const user = userEvent.setup();
+    let decided = false;
+    mockSession();
+    server.use(
+      // The list is stale; the fresh read says it was approved meanwhile.
+      http.get("*/api/afrikob/admin/approvals/apr-1", () => HttpResponse.json(envelope({ ...approvals[0], status: "Approved" }))),
+      http.post("*/api/afrikob/admin/approvals/apr-1/decide", () => {
+        decided = true;
+        return HttpResponse.json(envelope(approvals[0]));
+      }),
+    );
+    renderWithClient(<ApprovalsInbox scope="platform" description="d" />);
+    await user.click((await screen.findAllByRole("button", { name: "Request actions" }))[0]);
+    await user.click(await screen.findByRole("menuitem", { name: /Approve/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/already approved/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(decided).toBe(false);
   });
 
   it("will not reject without a reason", async () => {
@@ -102,7 +125,7 @@ describe("Tenant admin", () => {
     renderWithClient(<TenantAdminPage />);
     expect(await screen.findByRole("heading", { name: "Afikob" })).toBeInTheDocument();
     expect(await screen.findAllByText("GHS 9,958.60")).not.toHaveLength(0);
-    expect(screen.getByText("Required before a payout")).toBeInTheDocument();
+    expect(screen.getByText("Required before a disbursement")).toBeInTheDocument();
     expect(screen.getAllByText(/Collection/).length).toBeGreaterThan(0);
   });
 
@@ -141,7 +164,7 @@ describe("Tenant admin", () => {
     const sheet = await screen.findByRole("dialog");
     await user.type(within(sheet).getByLabelText("Name"), "Akosua Mensah");
     await user.type(within(sheet).getByLabelText("Email"), "new@afikob.com");
-    await user.type(within(sheet).getByLabelText("Temporary password"), "first-password");
+    await user.type(within(sheet).getByLabelText("Temporary password"), "first-password1");
     await user.click(within(sheet).getByLabelText("Can administer the tenant"));
     await user.click(within(sheet).getByRole("button", { name: "Add person" }));
 

@@ -22,21 +22,38 @@ describe("csv export", () => {
 });
 
 describe("bulk rows", () => {
+  const TELCOS = new Set(["MTN", "VOD"]);
   const records: Record<string, string>[] = [
-    { "Account Number": "0241234567", "Bank Code": "MTN", Name: "Ama Mensah", Amount: "10", Reference: "r1", "Client Transaction Id": "C1" },
+    { "Account Number": "0241234567", "Bank Code": "MTN", Name: "Ama Mensah", Amount: "10", Reference: "r1", "Client Transaction Id": "CT-1" },
     { "Account Number": "12", "Bank Code": "MTN", Name: "Bad", Amount: "abc", Reference: "r2" },
-    { "Account Number": "0551234567", "Bank Code": "VOD", Name: "Kofi", Amount: "5", Reference: "r3", "Client Transaction Id": "C1" },
+    { "Account Number": "0551234567", "Bank Code": "VOD", Name: "Kofi", Amount: "5", Reference: "r3", "Client Transaction Id": "CT-1" },
     { "Account Number": "0201234567", "Bank Code": "GCB", Name: "Yaw Owusu", Amount: "2.5", Reference: "r4" },
   ];
 
   it("maps header aliases, validates and flags duplicates", () => {
-    const rows = flagDuplicates(buildRows(records));
+    const rows = flagDuplicates(buildRows(records, TELCOS));
     expect(rows[0].item).toBeNull();
     expect(rows[0].errors).toContain("clientTransactionId: duplicate in file");
     expect(rows[1].item).toBeNull();
     expect(rows[1].errors.join()).toMatch(/accountNumber/);
     expect(rows[3].item).toMatchObject({ accountNumber: "0201234567", amount: 2.5, currency: "GHS" });
     expect(rows[3].item?.clientTransactionId).toMatch(/^BLK-/);
+  });
+
+  it("checks wallet rows as Ghanaian mobile numbers and normalises them", () => {
+    const rows = buildRows(
+      [
+        { "Account Number": "+233 24 123 4567", "Bank Code": "MTN", Name: "Ama Mensah", Amount: "10.00", Reference: "Salary" },
+        { "Account Number": "12345678", "Bank Code": "MTN", Name: "Ama Mensah", Amount: "10", Reference: "Salary" },
+        { "Account Number": "1234 5678 90", "Bank Code": "GCB", Name: "Yaw Owusu", Amount: "10", Reference: "Salary" },
+        { "Account Number": "0241234567", "Bank Code": "GCB", Name: "Yaw Owusu", Amount: "10.555", Reference: "Salary" },
+      ],
+      TELCOS,
+    );
+    expect(rows[0].item?.accountNumber).toBe("0241234567");
+    expect(rows[1].errors.join()).toMatch(/Ghanaian mobile/);
+    expect(rows[2].item?.accountNumber).toBe("1234567890");
+    expect(rows[3].errors.join()).toMatch(/2 decimal places/);
   });
 
   it("matches verified names loosely", () => {
@@ -46,7 +63,7 @@ describe("bulk rows", () => {
   });
 
   it("applies verification by account, falling back to position", () => {
-    const rows = buildRows([records[0], records[3], records[2]]);
+    const rows = buildRows([records[0], records[3], records[2]], TELCOS);
     const verified = applyVerification(rows, [
       { accountNumber: "0241234567", accountName: "MENSAH AMA", status: "Verified", message: null },
       { accountNumber: "0201234567", accountName: "Esi Owusu", status: "Verified", message: null },

@@ -3,7 +3,6 @@ import { expect, test, type Page } from "@playwright/test";
 const ADMIN = { email: "ops@afrikob.com", password: "correct-horse" };
 const TENANT_ADMIN = { email: "owner@afikob.com", password: "tenant-horse" };
 const TENANT_CLERK = { email: "clerk@afikob.com", password: "tenant-clerk" };
-const TENANT_KEY = "e2e-tenant-key-0001";
 /** The mock gateway always emails this code. */
 const LOGIN_CODE = "654321";
 
@@ -27,14 +26,6 @@ async function signInAsAdmin(page: Page, password = ADMIN.password) {
   await page.getByLabel("One-time code").fill(LOGIN_CODE);
   await page.getByRole("button", { name: /Verify and sign in/ }).click();
   // Wait for the session to exist before the test navigates anywhere.
-  await page.waitForURL((url) => !url.pathname.startsWith("/signin"));
-}
-
-async function signInWithKey(page: Page, key: string) {
-  await page.goto("/signin");
-  await page.getByRole("tab", { name: /Merchant/ }).click();
-  await page.getByLabel("API key", { exact: true }).fill(key);
-  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/signin"));
 }
 
@@ -83,8 +74,9 @@ test("shows the landing page to visitors and explains a bad password", async ({ 
   await expect(page.getByRole("alert").filter({ hasText: "Incorrect email or password" })).toBeVisible();
 });
 
-test("a merchant collects, pays out and sees the payout in the ledger", async ({ page, isMobile }) => {
-  await signInWithKey(page, TENANT_KEY);
+test("a merchant's user signs in with a password, disburses and sees it in the ledger", async ({ page, isMobile }) => {
+  await signInWithPassword(page, TENANT_CLERK.email, TENANT_CLERK.password);
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(visible(page, "GHS 9,958.60")).toBeVisible();
 
@@ -92,23 +84,25 @@ test("a merchant collects, pays out and sees the payout in the ledger", async ({
   await expect(page.getByRole("heading", { name: "Collections" })).toBeVisible();
   await expect(visible(page, "Ama Mensah")).toBeVisible();
 
-  await page.getByRole("link", { name: "Payouts", exact: true }).click();
+  await page.getByRole("link", { name: "Disbursements", exact: true }).click();
   await page.getByRole("button", { name: "Send money" }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByLabel("Institution").selectOption("GCB");
-  await sheet.getByLabel("Account or wallet number").fill("851274680");
+  await sheet.getByLabel("Account number").fill("851274680");
   await sheet.getByRole("button", { name: "Check name" }).click();
   await expect(sheet.getByLabel("Account name")).toHaveValue("KOFI BOATENG");
   await sheet.getByLabel("Amount (GHS)").fill("25");
-  await sheet.getByLabel("Reference", { exact: true }).fill("E2E payout");
+  await sheet.getByLabel("Reference", { exact: true }).fill("E2E disbursement");
   await sheet.getByRole("button", { name: "Review" }).click();
   await page.getByRole("button", { name: "Send money" }).last().click();
-  await expect(sheet.getByText("Payout submitted")).toBeVisible();
+  await expect(sheet.getByText("Disbursement accepted, waiting for the provider")).toBeVisible();
   await sheet.getByRole("button", { name: "Done" }).click();
   await expect(visible(page, "KOFI BOATENG")).toBeVisible();
 
-  // Admin pages stay closed to a merchant key.
+  // Admin pages, and their own tenant's administration, stay closed to them.
   await page.goto("/admin/tenants");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/tenant-admin");
   await expect(page).toHaveURL(/\/dashboard$/);
   expect(isMobile !== undefined).toBe(true);
 });
@@ -135,6 +129,16 @@ test("an admin onboards a tenant, funds it, adds a colleague and approves a refu
   await reveal.getByRole("button", { name: "Done" }).click();
   await expect(page.getByText(/afk_live_/)).toHaveCount(0);
 
+  // Then the person who signs in for them: the key alone opens no portal.
+  const firstAdmin = page.getByRole("dialog");
+  await expect(firstAdmin.getByRole("heading", { name: "Add their first administrator" })).toBeVisible();
+  await firstAdmin.getByLabel("Name").fill("Efua Asante");
+  await firstAdmin.getByLabel("Email").fill(`efua-${code.toLowerCase()}@shop.gh`);
+  await firstAdmin.getByLabel("Temporary password").fill("first-password1");
+  await firstAdmin.getByRole("button", { name: "Add administrator" }).click();
+  await expect(visible(page, "Administrator added")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
   await visible(page, `Tenant ${code}`).click();
   await page.getByRole("tab", { name: "Wallet" }).click();
   await page.getByRole("button", { name: "Add funds" }).click();
@@ -150,7 +154,7 @@ test("an admin onboards a tenant, funds it, adds a colleague and approves a refu
   const person = page.getByRole("dialog");
   await person.getByLabel("Name").fill("Yaw Owusu");
   await person.getByLabel("Email").fill(`yaw-${code}@afrikob.com`);
-  await person.getByLabel("Temporary password").fill("first-password");
+  await person.getByLabel("Temporary password").fill("first-password1");
   await person.getByRole("button", { name: "Add person" }).click();
   await expect(visible(page, "Yaw Owusu")).toBeVisible();
 
@@ -163,7 +167,8 @@ test("an admin onboards a tenant, funds it, adds a colleague and approves a refu
 
 test("a tenant admin requests funds and an Afrikob admin approves them", async ({ page, browser }) => {
   await signInWithPassword(page, TENANT_ADMIN.email, TENANT_ADMIN.password);
-  await expect(page).toHaveURL(/\/tenant-admin$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/tenant-admin");
   await expect(page.getByRole("heading", { name: "Afikob" })).toBeVisible();
 
   // Requesting funds does not move money: it queues an approval.
@@ -190,9 +195,9 @@ test("a tenant admin requests funds and an Afrikob admin approves them", async (
   // The approved top-up has been credited to the tenant's wallet.
   await page.goto("/tenant-admin");
   await expect(visible(page, "GHS 12,458.60")).toBeVisible();
-  // A password session has no money screens: the gateway refuses those.
+  // The same password session runs their money too.
   await page.goto("/collections");
-  await expect(page).toHaveURL(/\/tenant-admin$/);
+  await expect(page.getByRole("heading", { name: "Collections" })).toBeVisible();
   await staff.close();
 });
 
@@ -224,31 +229,33 @@ test("a signed-out admin resets their password and signs in with it", async ({ p
 
   await page.getByLabel("Code").fill("123456");
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("New password").fill("a-brand-new-password");
-  await page.getByLabel("Confirm password").fill("a-brand-new-password");
+  await page.getByLabel("New password").fill("a-brand-new-password1");
+  await page.getByLabel("Confirm password").fill("a-brand-new-password1");
   await page.getByRole("button", { name: "Save password" }).click();
   await expect(page).toHaveURL(/reason=password-reset/);
 
-  await signInAsAdmin(page, "a-brand-new-password");
+  await signInAsAdmin(page, "a-brand-new-password1");
   await expect(page).toHaveURL(/\/admin$/);
 });
 
-/**
- * A tenant user with only a password reaches no money screens: the gateway
- * refuses a portal session there, so the app says so instead of failing later.
- */
-test("a password-only tenant user lands on the dead end, not a broken dashboard", async ({ page }) => {
+/** API keys are for a tenant's own systems; the portal shows them how to connect. */
+test("a tenant user finds integration details, and staff stay out of tenant screens", async ({ page, browser }) => {
   await signInWithPassword(page, TENANT_CLERK.email, TENANT_CLERK.password);
-  await expect(page).toHaveURL(/\/no-access$/);
-  await expect(page.getByText(/API key/i).first()).toBeVisible();
-  // Every money destination sends them back here.
-  for (const path of ["/dashboard", "/collections", "/disbursements", "/refunds"]) {
-    await page.goto(path);
-    await expect(page).toHaveURL(/\/no-access$/);
+  await page.goto("/developers");
+  await expect(page.getByRole("heading", { name: "Developers" })).toBeVisible();
+  await expect(visible(page, "/auth/token")).toBeVisible();
+  // The retired dead end sends them home.
+  await page.goto("/no-access");
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  const staff = await browser.newContext({ extraHTTPHeaders: { "x-forwarded-for": "203.0.113.201" } });
+  const staffPage = await staff.newPage();
+  await signInAsAdmin(staffPage);
+  for (const path of ["/disbursements", "/collections", "/tenant-admin"]) {
+    await staffPage.goto(path);
+    await expect(staffPage).toHaveURL(/\/admin$/);
   }
-  // As does the tenant administration area, which is not theirs.
-  await page.goto("/tenant-admin");
-  await expect(page).toHaveURL(/\/no-access$/);
+  await staff.close();
 });
 
 /**

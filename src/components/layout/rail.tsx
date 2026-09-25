@@ -16,12 +16,12 @@ const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "1.0.0";
 /** Persistent icon rail on desktop; the tab bar below replaces it on phones. */
 export function Rail({ session }: { session: ClientSession }) {
   const pathname = usePathname();
-  const sections = navFor(session.role, session.mode);
+  const sections = navFor(session.role);
   const active = activeHref(pathname, sections);
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[5.5rem] shrink-0 flex-col items-center border-r border-line bg-paper py-4 lg:flex">
-      <Link href={homeFor(session.role, session.mode)} aria-label="Afrikob home" className="mb-5">
+      <Link href={homeFor(session.role)} aria-label="Afrikob home" className="mb-5">
         <Logo showWordmark={false} />
       </Link>
       <nav aria-label="Main" className="flex w-full flex-1 flex-col gap-5 overflow-y-auto">
@@ -61,9 +61,9 @@ const TAB_BAR_SLOTS = 4;
 export function TabBar({ session }: { session: ClientSession }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
-  const sections = navFor(session.role, session.mode);
+  const sections = navFor(session.role);
   const active = activeHref(pathname, sections);
-  const items = primaryNavFor(session.role, session.mode).slice(0, TAB_BAR_SLOTS);
+  const items = primaryNavFor(session.role).slice(0, TAB_BAR_SLOTS);
   const onBar = new Set(items.map((i) => i.href));
   const rest = sections.flatMap((s) => s.items).filter((i) => !onBar.has(i.href));
 

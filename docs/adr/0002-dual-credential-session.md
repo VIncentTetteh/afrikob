@@ -1,6 +1,6 @@
 # ADR-0002: One session, two gateway credentials
 
-**Status**: Accepted
+**Status**: Accepted (bearer credential superseded by ADR-0004)
 **Date**: 2026-09-21
 **Authors**: @vincenttetteh
 **Supersedes the auth half of**: ADR-0001

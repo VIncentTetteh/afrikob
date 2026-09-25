@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { KeyValueList, recordToItems } from "@/components/domain/key-value-list";
 import { PageHeader } from "@/components/domain/page-header";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
+import { Field, InlineAction, Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { State } from "@/components/ui/state";
 import { useStatusCheck } from "@/lib/api/hooks";
@@ -23,19 +23,23 @@ export default function StatusCheckPage() {
       <PageHeader title="Status check" description="Look up where a payment stands, using your own reference" />
       <Panel>
         <PanelBody>
-          <form onSubmit={form.handleSubmit((v) => check.mutate(v))} className="flex flex-col gap-3 sm:flex-row sm:items-end" noValidate>
+          <form onSubmit={form.handleSubmit((v) => check.mutate(v))} noValidate>
             <Field
               label="Your reference"
               htmlFor="sc-id"
               error={form.formState.errors.clientTransactionId?.message}
-              className="flex-1"
               hint="The client transaction ID you sent with the payment."
             >
-              <Input id="sc-id" placeholder="COL-..." {...form.register("clientTransactionId")} />
+              <InlineAction
+                action={
+                  <Button type="submit" loading={check.isPending}>
+                    {!check.isPending && <SearchCheck />} Check
+                  </Button>
+                }
+              >
+                <Input id="sc-id" placeholder="COL-..." autoComplete="off" spellCheck={false} maxLength={64} className="font-mono" {...form.register("clientTransactionId")} />
+              </InlineAction>
             </Field>
-            <Button type="submit" loading={check.isPending}>
-              {!check.isPending && <SearchCheck />} Check
-            </Button>
           </form>
         </PanelBody>
       </Panel>

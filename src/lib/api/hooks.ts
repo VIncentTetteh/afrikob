@@ -1,11 +1,14 @@
 "use client";
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import type { Result } from "./client";
 import { adminApi, approvalsApi, paymentsApi, refundsApi, tenantAdminApi, type ApprovalScope } from "./endpoints";
 import { transactionsApi } from "./endpoints";
+import { TENANT_REFUNDS_AVAILABLE } from "./features";
 import { qk } from "./keys";
+import { paymentOutcome } from "./outcome";
 import type * as Req from "./schemas/requests";
 import { useSession } from "./session";
 import { approvalsHrefFor } from "@/lib/session/types";
@@ -75,18 +78,24 @@ export const useTransactionRefunds = (txId: string | null) =>
   useQuery({
     queryKey: qk.refunds.forTransaction(txId ?? ""),
     queryFn: ({ signal }) => refundsApi.listForTransaction(txId ?? "", signal),
-    enabled: Boolean(txId),
+    enabled: TENANT_REFUNDS_AVAILABLE && Boolean(txId),
   });
 
 export const useRefund = (id: string | null) =>
   useQuery({
     queryKey: qk.refunds.detail(id ?? ""),
     queryFn: ({ signal }) => refundsApi.get(id ?? "", signal),
-    enabled: Boolean(id),
+    enabled: TENANT_REFUNDS_AVAILABLE && Boolean(id),
   });
 
 export const useTelcos = () =>
   useQuery({ queryKey: qk.payments.telcos, queryFn: ({ signal }) => paymentsApi.telcos(signal), staleTime: REFERENCE_DATA_STALE_MS });
+
+/** Codes of the mobile money networks, to tell a wallet from a bank account. */
+export function useTelcoCodes(): ReadonlySet<string> {
+  const telcos = useTelcos();
+  return useMemo(() => new Set((telcos.data ?? []).map((t) => (t.code ?? "").toUpperCase()).filter(Boolean)), [telcos.data]);
+}
 
 export const useBanks = () =>
   useQuery({ queryKey: qk.payments.banks, queryFn: ({ signal }) => paymentsApi.banks(signal), staleTime: REFERENCE_DATA_STALE_MS });
@@ -114,6 +123,24 @@ export const useApprovals = (scope: ApprovalScope, status?: string) =>
   useQuery({
     queryKey: qk.approvals.list(scope, status),
     queryFn: ({ signal }) => approvalsApi.list(scope, status, signal),
+  });
+
+/** A fresh read of one request, taken when someone is about to decide it. */
+export const useApproval = (scope: ApprovalScope, id: string | null) =>
+  useQuery({
+    queryKey: qk.approvals.detail(scope, id ?? ""),
+    queryFn: ({ signal }) => approvalsApi.get(scope, id ?? "", signal),
+    enabled: Boolean(id),
+    staleTime: 0,
+  });
+
+/** A fresh read of one person, taken when their details are about to be edited. */
+export const usePortalUser = (scope: "platform" | "tenant-admin", id: string | null) =>
+  useQuery({
+    queryKey: [...qk.users.detail(id ?? ""), scope],
+    queryFn: ({ signal }) => (scope === "platform" ? adminApi.getUser(id ?? "", signal) : tenantAdminApi.getUser(id ?? "", signal)),
+    enabled: Boolean(id),
+    staleTime: 0,
   });
 
 export const useTenantDetail = (enabled = true) =>
@@ -311,8 +338,10 @@ function usePaymentMutation<T, R>(fn: (body: T) => Promise<R>) {
   });
 }
 
-export const useDisburse = () => usePaymentMutation((b: Req.Disbursement) => paymentsApi.disburse(b));
-export const useCollect = () => usePaymentMutation((b: Req.Collection) => paymentsApi.collect(b));
+export const useDisburse = () =>
+  usePaymentMutation(async (b: Req.Disbursement) => paymentOutcome(await paymentsApi.disburse(b), "Disbursement"));
+export const useCollect = () =>
+  usePaymentMutation(async (b: Req.Collection) => paymentOutcome(await paymentsApi.collect(b), "Collection"));
 export const useVerifyName = () => useMutation({ mutationFn: (b: Req.NameVerify) => paymentsApi.verifyName(b) });
 export const useStatusCheck = () => useMutation({ mutationFn: (b: Req.StatusCheck) => paymentsApi.statusCheck(b) });
 export const useBulkNameVerify = () =>
@@ -322,8 +351,8 @@ export const useBulkStatus = () => useMutation({ mutationFn: (b: Req.BulkStatus)
 export function useCreateBulk() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (v: { body: Req.BulkDisbursement; clientBatchId: string }) =>
-      paymentsApi.createBulk(v.body, v.clientBatchId),
+    mutationFn: async (v: { body: Req.BulkDisbursement; clientBatchId: string }) =>
+      paymentOutcome(await paymentsApi.createBulk(v.body, v.clientBatchId), "Batch"),
     onSuccess: () => invalidate(qc, [qk.payments.bulk, qk.payments.balances]),
   });
 }

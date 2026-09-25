@@ -23,7 +23,8 @@ export function formatDate(value: string | null | undefined): string {
 const moneyFormatters = new Map<string, Intl.NumberFormat>();
 
 export function formatMoney(amount: number | null | undefined, currency?: string | null): string {
-  if (amount === null || amount === undefined) return FALLBACK;
+  // An amount the gateway did not send shows as zero, as money columns read best that way.
+  if (amount === null || amount === undefined || !Number.isFinite(amount)) amount = 0;
   const code = (currency || "GHS").toUpperCase();
   let fmt = moneyFormatters.get(code);
   if (!fmt) {

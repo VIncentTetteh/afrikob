@@ -18,7 +18,7 @@ import { buttonVariants } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Afrikob Pay",
   description:
-    "Collect from mobile money, pay out to banks and wallets in bulk, and account for every cedi — with maker-checker controls and an audited refund trail.",
+    "Collect from mobile money, disburse to banks and wallets in bulk, and account for every cedi — with maker-checker controls and an audited refund trail.",
 };
 
 const CAPABILITIES = [
@@ -29,12 +29,12 @@ const CAPABILITIES = [
   },
   {
     icon: ScrollText,
-    title: "Payouts",
+    title: "Disbursements",
     body: "Send to any Ghanaian bank account or mobile wallet. The beneficiary's registered name is fetched from the institution before the money leaves.",
   },
   {
     icon: FileSpreadsheet,
-    title: "Bulk payouts",
+    title: "Bulk disbursements",
     body: "Upload a CSV of up to a thousand rows. Every row is validated, every name checked, mismatches flagged — then the batch goes out under one reference.",
   },
   {
@@ -50,11 +50,11 @@ const CAPABILITIES = [
   {
     icon: ReceiptText,
     title: "Reports",
-    body: "Filter collections or payouts by tenant, date, state and currency. Read them on screen or download the same rows for reconciliation.",
+    body: "Filter collections or disbursements by tenant, date, state and currency. Read them on screen or download the same rows for reconciliation.",
   },
 ];
 
-const PAYOUT_STEPS = [
+const DISBURSEMENT_STEPS = [
   { step: "Choose", body: "Pick the bank or mobile network and enter the account number." },
   { step: "Check the name", body: "We ask the institution who owns that account and fill the name in for you." },
   { step: "Confirm", body: "Review the amount and beneficiary. Anything unverified is called out before you commit." },
@@ -70,26 +70,26 @@ const CONTROLS = [
   {
     icon: Users,
     title: "People and permissions",
-    body: "Afrikob staff sign in with email and password. Each person can submit, approve, both or neither, and can be deactivated the moment they change roles.",
+    body: "Staff and merchant teams sign in with email, password and an emailed code. Each person can submit, approve, both or neither, and can be deactivated the moment they change roles.",
   },
   {
     icon: BadgeCheck,
-    title: "Keys kept out of browsers",
-    body: "A merchant's API key is exchanged for a short session on our server. The key itself is shown once when issued and never stored in the browser.",
+    title: "Keys stay with your systems",
+    body: "API keys are for your own software calling the gateway, never for signing in here. Each key is shown once when issued, then it is yours to store safely.",
   },
 ];
 
 const FAQS = [
   {
     q: "Who signs in with what?",
-    a: "Afrikob staff use an email and password. Merchants use the API key issued with their tenant record. Both land in the same console, showing only what that role is allowed to touch.",
+    a: "Everyone signs in with the email and password their administrator set up, confirmed by a code sent to their inbox. Afrikob staff see the platform; a merchant's team sees only their own money and people. API keys are for integrating the gateway into your own systems.",
   },
   {
     q: "How do merchants get onto the platform?",
-    a: "An Afrikob administrator creates the tenant, sets its daily and per-payment limits, and issues the first API key. The key is displayed once, then it is the merchant's to store safely.",
+    a: "An Afrikob administrator creates the tenant, sets its daily and per-payment limits, adds the merchant's first administrator, and issues an API key for their integration. That administrator then adds the rest of their team.",
   },
   {
-    q: "What happens when a payout fails?",
+    q: "What happens when a disbursement fails?",
     a: "The record keeps the provider's message and reason, so you can tell an expired account from a closed one. Bulk batches can be reconciled against the provider and re-checked per item.",
   },
   {
@@ -111,7 +111,7 @@ export default function LandingPage() {
             Move money across Ghana, and account for every cedi.
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
-            Afrikob Pay collects from mobile money wallets, pays out to banks and wallets one at a time or a thousand at
+            Afrikob Pay collects from mobile money wallets, disburses to banks and wallets one at a time or a thousand at
             once, and keeps a record you can hand to an auditor.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -126,7 +126,7 @@ export default function LandingPage() {
             {[
               { label: "Networks", value: "MTN · Telecel" },
               { label: "Banks", value: "All GhIPSS" },
-              { label: "Per batch", value: "1,000 payouts" },
+              { label: "Per batch", value: "1,000 disbursements" },
             ].map((stat) => (
               <div key={stat.label}>
                 <dt className="text-xs text-ink-soft">{stat.label}</dt>
@@ -166,14 +166,14 @@ export default function LandingPage() {
         <div className="mx-auto w-full max-w-6xl px-5 sm:px-8">
           <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)] lg:gap-16">
             <div>
-              <h2 className="font-display text-[2rem] leading-tight tracking-tight">How a payout works</h2>
+              <h2 className="font-display text-[2rem] leading-tight tracking-tight">How a disbursement works</h2>
               <p className="mt-2 text-ink-soft">
                 The order matters: nothing leaves an account before the beneficiary is confirmed and the amount is read
                 back to you.
               </p>
             </div>
             <ol className="space-y-6">
-              {PAYOUT_STEPS.map((item, index) => (
+              {DISBURSEMENT_STEPS.map((item, index) => (
                 <li key={item.step} className="flex gap-5 border-t border-line pt-5">
                   <span className="figure w-6 shrink-0 text-ink-faint" aria-hidden>
                     {index + 1}
@@ -194,15 +194,15 @@ export default function LandingPage() {
           <article className="rounded-2xl border border-line bg-paper p-7">
             <h2 className="font-display text-2xl tracking-tight">For merchants</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              Sign in with your API key and see your own money: what you collected, what you can pay out, what is still in
-              flight. Raise a charge, send a payout, upload payroll, create a payment link, or check where a single
-              payment stands using your own reference.
+              Sign in with your email and password and see your own money: what you collected, what you can disburse, what
+              is still in flight. Raise a charge, send a disbursement, upload payroll, or check where a single payment
+              stands using your own reference. Your developers connect with an API key.
             </p>
           </article>
           <article className="rounded-2xl border border-line bg-paper p-7">
             <h2 className="font-display text-2xl tracking-tight">For the Afrikob team</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              Onboard merchants, issue and rotate their keys, fund their wallets, set per-payment-type fees, review refund
+              Onboard merchants and their teams, issue integration keys, fund their wallets, set per-payment-type fees, review refund
               requests, and reconcile the whole platform by tenant and date. Every funding entry and approval carries the
               name of the person who made it.
             </p>
@@ -235,8 +235,8 @@ export default function LandingPage() {
             </p>
             <ul className="mt-6 space-y-2.5 text-sm text-ink-soft">
               {[
-                "Idempotency keys on refunds, batch references on bulk payouts",
-                "Name verification before a payout, one account or a thousand",
+                "Idempotency keys on refunds, batch references on bulk disbursements",
+                "Name verification before a disbursement, one account or a thousand",
                 "Status checks by your own transaction reference",
               ].map((line) => (
                 <li key={line} className="flex gap-2.5">
@@ -251,7 +251,7 @@ export default function LandingPage() {
               <span className="size-2 rounded-full bg-[var(--failed)]" aria-hidden />
               <span className="size-2 rounded-full bg-[var(--pending)]" aria-hidden />
               <span className="size-2 rounded-full bg-[var(--settled)]" aria-hidden />
-              <span className="ml-2">Send a payout</span>
+              <span className="ml-2">Send a disbursement</span>
             </div>
             <pre className="overflow-x-auto px-5 py-4 text-[0.8125rem] leading-relaxed text-pitch-ink/85">
               <code>{`curl -X POST https://api.afrikob.com/api/v1/payments/disbursement \\
@@ -290,7 +290,7 @@ export default function LandingPage() {
           <div>
             <h2 className="font-display text-2xl tracking-tight">Ready when you are</h2>
             <p className="mt-1.5 text-ink-soft">
-              Merchants sign in with their key. Afrikob staff sign in with email and password.
+              Merchants and Afrikob staff sign in with email and password.
             </p>
           </div>
           <Link href="/signin" className={buttonVariants({ size: "lg" })}>

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { RevealKeyDialog } from "./create-tenant-dialog";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
+import { Field, InlineAction, Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
 import { useIssueCredential } from "@/lib/api/hooks";
 import { issueCredentialSchema, type IssueCredential } from "@/lib/api/schemas/requests";
@@ -37,21 +37,28 @@ export function IssueCredentialPanel({ tenantId }: { tenantId: string }) {
 
   return (
     <Panel>
-      <PanelHeader title="API keys" description="Issue a key for this tenant. Existing keys are not listed by the gateway." />
+      <PanelHeader
+        title="Integration keys"
+        description="For the tenant's own systems to call the gateway. Not used to sign in to this portal. The gateway does not list existing keys."
+      />
       <PanelBody>
-        <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-end" noValidate>
+        <form onSubmit={submit} noValidate>
           <Field
             label="What is this key for?"
             htmlFor="cred-name"
             error={form.formState.errors.name?.message}
-            className="flex-1"
             hint="For example: production server, staging"
           >
-            <Input id="cred-name" {...form.register("name")} />
+            <InlineAction
+              action={
+                <Button type="submit" loading={issue.isPending}>
+                  {!issue.isPending && <KeyRound />} Issue key
+                </Button>
+              }
+            >
+              <Input id="cred-name" autoComplete="off" maxLength={100} {...form.register("name")} />
+            </InlineAction>
           </Field>
-          <Button type="submit" loading={issue.isPending}>
-            {!issue.isPending && <KeyRound />} Issue key
-          </Button>
         </form>
       </PanelBody>
       <RevealKeyDialog

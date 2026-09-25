@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ConfirmDialog } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader } from "@/components/ui/panel";
-import { useBulkNameVerify, useCreateBulk } from "@/lib/api/hooks";
+import { useBulkNameVerify, useCreateBulk, useTelcoCodes } from "@/lib/api/hooks";
 import { applyVerification, buildRows, flagDuplicates, summarize, type BulkRow, type NameMatch } from "@/lib/csv/bulk";
 import { parseCsvFile } from "@/lib/csv";
 import { formatMoney } from "@/lib/format";
@@ -17,7 +17,7 @@ const PREVIEW_LIMIT = 200;
 
 const matchBadge: Record<NameMatch, { label: string; className: string; icon: typeof BadgeCheck }> = {
   unverified: { label: "Not checked", className: "text-ink-soft", icon: HelpCircle },
-  match: { label: "Match", className: "text-success", icon: BadgeCheck },
+  match: { label: "Match", className: "text-settled", icon: BadgeCheck },
   mismatch: { label: "Mismatch", className: "text-pending", icon: AlertCircle },
   not_found: { label: "Not found", className: "text-failed", icon: XCircle },
 };
@@ -32,6 +32,7 @@ export function BulkUploader() {
   const [clientBatchId, setClientBatchId] = useState("");
   const verify = useBulkNameVerify();
   const create = useCreateBulk();
+  const telcoCodes = useTelcoCodes();
   const stats = useMemo(() => summarize(rows), [rows]);
 
   const onFile = async (file: File | undefined) => {
@@ -39,7 +40,7 @@ export function BulkUploader() {
     const parsed = await parseCsvFile(file);
     setFileName(file.name);
     setParseErrors(parsed.errors);
-    setRows(flagDuplicates(buildRows(parsed.rows)));
+    setRows(flagDuplicates(buildRows(parsed.rows, telcoCodes)));
     setClientBatchId(`BATCH-${crypto.randomUUID()}`);
     verify.reset();
     create.reset();
@@ -60,12 +61,18 @@ export function BulkUploader() {
     create.mutate(
       { body: { disbursements }, clientBatchId },
       {
-        onSuccess: (batch) => {
-          toast.success(`Batch submitted: ${disbursements.length} payouts`);
+        onSuccess: (outcome) => {
           setConfirming(false);
+          // A refused batch keeps its rows, so they can be fixed and sent again.
+          if (outcome.tone === "failed") {
+            toast.error(outcome.detail ? `${outcome.title}: ${outcome.detail}` : outcome.title);
+            return;
+          }
+          toast[outcome.tone === "success" ? "success" : "info"](`${outcome.title}: ${disbursements.length} disbursements`);
           setRows([]);
           setFileName(null);
-          if (batch.id) router.push(`/disbursements/bulk/${encodeURIComponent(batch.id)}`);
+          const batchId = outcome.data?.id;
+          if (batchId) router.push(`/disbursements/bulk/${encodeURIComponent(batchId)}`);
         },
       },
     );
@@ -119,7 +126,7 @@ export function BulkUploader() {
             )}
             <div className="max-h-[28rem] overflow-auto rounded-lg border border-line">
               <table className="w-full text-left text-sm">
-                <thead className="sticky top-0 bg-field text-xs uppercase tracking-wide text-ink-soft">
+                <thead className="sticky top-0 z-10 bg-field text-xs uppercase tracking-wide text-ink-soft">
                   <tr>{["#", "Account", "Institution", "Name", "Verified name", "Amount", "Reference", "Check"].map((h) => <th key={h} className="whitespace-nowrap px-3 py-3 font-semibold">{h}</th>)}</tr>
                 </thead>
                 <tbody>

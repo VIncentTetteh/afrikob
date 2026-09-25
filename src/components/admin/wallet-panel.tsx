@@ -9,6 +9,8 @@ import { ConfirmDialog, ErrorState } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/input";
+import { CurrencySelect } from "@/components/ui/currency-select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Panel } from "@/components/ui/panel";
 import { useTenantWallet, useTopUp } from "@/lib/api/hooks";
 import { topUpSchema, type TopUp, type TopUpInput } from "@/lib/api/schemas/requests";
@@ -17,7 +19,7 @@ import type { ClientSession } from "@/lib/api/session";
 
 const WALLET_TYPES = [
   { value: "", label: "Default wallet" },
-  { value: "DISBURSEMENT", label: "Payouts" },
+  { value: "DISBURSEMENT", label: "Disbursements" },
   { value: "COLLECTION", label: "Collections" },
 ];
 
@@ -114,14 +116,14 @@ export function WalletPanel({ tenantId, session }: { tenantId: string; session: 
         >
           <div className="grid grid-cols-3 gap-3">
             <Field label="Currency" htmlFor="tu-cur" error={e.currency?.message}>
-              <Input id="tu-cur" className="uppercase" maxLength={3} {...form.register("currency")} />
+              <CurrencySelect id="tu-cur" {...form.register("currency")} />
             </Field>
             <Field label="Amount" htmlFor="tu-amt" error={e.amount?.message} className="col-span-2">
-              <Input id="tu-amt" type="number" min="0" step="0.01" inputMode="decimal" {...form.register("amount")} />
+              <MoneyInput id="tu-amt" aria-invalid={Boolean(e.amount) || undefined} {...form.register("amount")} />
             </Field>
           </div>
           <Field label="Reference" htmlFor="tu-ref" error={e.reference?.message} hint="Deposit slip or transfer reference">
-            <Input id="tu-ref" {...form.register("reference")} />
+            <Input id="tu-ref" autoComplete="off" maxLength={100} {...form.register("reference")} />
           </Field>
         </form>
       </Dialog>

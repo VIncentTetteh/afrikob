@@ -1,5 +1,5 @@
 import type { BulkNameVerifyResult } from "@/lib/api/schemas/models";
-import { bulkDisbursementItemSchema, newClientTransactionId, type BulkDisbursementItem } from "@/lib/api/schemas/requests";
+import { bulkDisbursementItemSchema, newClientTransactionId, withDestination, type BulkDisbursementItem } from "@/lib/api/schemas/requests";
 
 export const BULK_TEMPLATE_HEADERS = ["accountNumber", "institutionCode", "accountName", "amount", "currency", "reference", "clientTransactionId"];
 export const BULK_TEMPLATE_SAMPLE = ["0241234567", "MTN", "Ama Mensah", "150.00", "GHS", "Salary Sept", ""];
@@ -27,12 +27,17 @@ function canonical(header: string): string {
   return HEADER_ALIASES[header.toLowerCase().replace(/[^a-z]/g, "")] ?? header;
 }
 
-/** Validates uploaded CSV rows against the bulk item schema. */
-export function buildRows(records: Record<string, string>[]): BulkRow[] {
+/**
+ * Validates uploaded CSV rows against the bulk item schema. With the telco codes
+ * from the gateway, a wallet row is checked (and normalised) as a Ghanaian mobile
+ * number and a bank row as an account number.
+ */
+export function buildRows(records: Record<string, string>[], telcoCodes: ReadonlySet<string> = new Set()): BulkRow[] {
+  const schema = withDestination(bulkDisbursementItemSchema, telcoCodes);
   return records.map((record, index) => {
     const input: Record<string, string> = {};
     for (const [k, v] of Object.entries(record)) input[canonical(k)] = (v ?? "").trim();
-    const parsed = bulkDisbursementItemSchema.safeParse({
+    const parsed = schema.safeParse({
       ...input,
       currency: input.currency || "GHS",
       clientTransactionId: input.clientTransactionId || newClientTransactionId("BLK"),

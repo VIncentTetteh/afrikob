@@ -2,10 +2,10 @@ import { statusTone, type StatusTone } from "@/lib/api/schemas/normalize";
 import { cn } from "@/lib/utils";
 
 const toneClass: Record<StatusTone, string> = {
-  success: "bg-success-soft text-success border-success/20",
-  pending: "bg-warning-soft text-warning border-warning/20",
-  failed: "bg-danger-soft text-danger border-danger/20",
-  neutral: "bg-muted text-muted-foreground border-border",
+  success: "bg-settled-wash text-settled border-settled/20",
+  pending: "bg-pending-wash text-pending border-pending/20",
+  failed: "bg-failed-wash text-failed border-failed/20",
+  neutral: "bg-field text-ink-soft border-line",
 };
 
 export function StatusPill({ status, tone, className }: { status: string | null; tone?: StatusTone; className?: string }) {
@@ -25,7 +25,7 @@ export function StatusPill({ status, tone, className }: { status: string | null;
 
 export function Tag({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center rounded-lg border border-success/30 bg-success-soft px-2.5 py-0.5 text-xs font-semibold text-success", className)}>
+    <span className={cn("inline-flex items-center rounded-lg border border-settled/30 bg-settled-wash px-2.5 py-0.5 text-xs font-semibold text-settled", className)}>
       {children}
     </span>
   );

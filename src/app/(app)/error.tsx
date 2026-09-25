@@ -3,5 +3,5 @@
 import { RouteError } from "@/components/domain/route-error";
 
 export default function AppError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  return <RouteError error={error} reset={reset} homeHref="/dashboard" />;
+  return <RouteError error={error} reset={reset} homeHref="/" />;
 }

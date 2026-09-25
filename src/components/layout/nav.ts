@@ -2,6 +2,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Building2,
+  Code2,
   FileSpreadsheet,
   Gauge,
   Inbox,
@@ -12,7 +13,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import type { AuthMode, Role } from "@/lib/session/types";
+import { TENANT_REFUNDS_AVAILABLE } from "@/lib/api/features";
+import type { Role } from "@/lib/session/types";
 
 export interface NavItem {
   href: string;
@@ -27,32 +29,27 @@ export interface NavSection {
   items: NavItem[];
 }
 
-/** The money screens, shared by merchants and tenant admins. */
+/** A tenant's own screens, shared by every tenant user and their administrators. */
 const moneySections: NavSection[] = [
   { title: "Money", items: [
     { href: "/dashboard", label: "Overview", icon: Gauge, primary: true },
     { href: "/collections", label: "Collections", icon: ArrowDownLeft, primary: true },
-    { href: "/disbursements", label: "Payouts", icon: ArrowUpRight, primary: true },
-    { href: "/disbursements/bulk", label: "Bulk payouts", icon: FileSpreadsheet },
+    { href: "/disbursements", label: "Disbursements", icon: ArrowUpRight, primary: true },
+    { href: "/disbursements/bulk", label: "Bulk disbursements", icon: FileSpreadsheet },
   ] },
   { title: "Tools", items: [
-    { href: "/refunds", label: "Refunds", icon: RotateCcw, primary: true },
-    { href: "/status-check", label: "Status check", icon: SearchCheck },
+    ...(TENANT_REFUNDS_AVAILABLE ? [{ href: "/refunds", label: "Refunds", icon: RotateCcw, primary: true }] : []),
+    { href: "/status-check", label: "Status check", icon: SearchCheck, primary: !TENANT_REFUNDS_AVAILABLE },
+    { href: "/developers", label: "Developers", icon: Code2 },
   ] },
 ];
 
-/**
- * A tenant's own administrator. They sign in with a password, and the gateway
- * refuses money endpoints for a password session, so these people run the
- * business: their tenant, their people, their approvals.
- */
-const tenantAdminNav: NavSection[] = [
-  { title: "Your business", items: [
-    { href: "/tenant-admin", label: "Tenant", icon: Store, primary: true },
-    { href: "/tenant-admin/approvals", label: "Approvals", icon: Inbox, primary: true },
-    { href: "/tenant-admin/people", label: "People", icon: Users, primary: true },
-  ] },
-];
+/** What a tenant's administrator adds on top: their organisation, people and approvals. */
+const organisationSection: NavSection = { title: "Organisation", items: [
+  { href: "/tenant-admin", label: "Organisation", icon: Store },
+  { href: "/tenant-admin/approvals", label: "Approvals", icon: Inbox },
+  { href: "/tenant-admin/people", label: "People", icon: Users },
+] };
 
 const adminNav: NavSection[] = [
   { title: "Platform", items: [
@@ -65,18 +62,18 @@ const adminNav: NavSection[] = [
     { href: "/admin/refunds", label: "Refunds", icon: RotateCcw },
     { href: "/admin/users", label: "People", icon: Users },
     { href: "/admin/approval-policies", label: "Approval rules", icon: ShieldCheck },
+    { href: "/developers", label: "Developers", icon: Code2 },
   ] },
 ];
 
-export function navFor(role: Role, mode: AuthMode = "apikey"): NavSection[] {
+export function navFor(role: Role): NavSection[] {
   if (role === "platform") return adminNav;
-  if (role === "tenant-admin") return tenantAdminNav;
-  // An ordinary tenant only has screens when it holds an API key.
-  return mode === "apikey" ? moneySections : [];
+  if (role === "tenant-admin") return [...moneySections, organisationSection];
+  return moneySections;
 }
 
-export function primaryNavFor(role: Role, mode: AuthMode = "apikey"): NavItem[] {
-  return navFor(role, mode).flatMap((s) => s.items.filter((i) => i.primary));
+export function primaryNavFor(role: Role): NavItem[] {
+  return navFor(role).flatMap((s) => s.items.filter((i) => i.primary));
 }
 
 /** Longest-prefix match so /disbursements/bulk doesn't also light up /disbursements. */

@@ -9,11 +9,14 @@ async function deriveKey(secret: string): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
+/**
+ * Only a portal cookie is a valid credential. A session sealed before API-key
+ * sign-in was retired carries `kind: "bearer"` and now reads as signed out.
+ */
 function isCredential(value: unknown): value is UpstreamCredential {
   if (!value || typeof value !== "object") return false;
   const c = value as Record<string, unknown>;
-  if (c.kind === "cookie") return typeof c.cookie === "string" && c.cookie.length > 0;
-  return c.kind === "bearer" && typeof c.jwt === "string" && c.jwt.length > 0;
+  return c.kind === "cookie" && typeof c.cookie === "string" && c.cookie.length > 0;
 }
 
 /** Encrypts session data into a compact JWE. Works in both Node and Edge runtimes. */

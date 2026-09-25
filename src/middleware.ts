@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { TENANT_REFUNDS_AVAILABLE } from "@/lib/api/features";
 import { sealSession, unsealSession } from "@/lib/session/seal";
 import {
-  authMode,
   DEFAULT_PORTAL_SESSION_MINUTES,
+  handlesMoney,
   homeFor,
   isRenewable,
   renewed,
@@ -15,8 +16,9 @@ import {
 const LANDING = "/";
 /** Pages a signed-out visitor may open. */
 const PUBLIC_PATHS = ["/signin", "/forgot-password"];
-/** Shown to a signed-in session that has nothing it may open. */
-const NO_ACCESS = "/no-access";
+/** Screens that do not exist (or are switched off); bookmarks land on home instead. */
+const RETIRED = ["/no-access", ...(TENANT_REFUNDS_AVAILABLE ? [] : ["/refunds"])];
+const isRetired = (pathname: string) => RETIRED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
 /** Areas only one role may open. */
 const AREAS: { prefix: string; role: Role }[] = [
@@ -68,22 +70,21 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
   // Signed-in people go straight to their own dashboard, landing page included.
   if (active && isPublic) {
-    const home = homeFor(active.role, authMode(active));
+    const home = homeFor(active.role);
     const back = safeNextPath(request.nextUrl.searchParams.get("next"));
     return await withRenewal(NextResponse.redirect(new URL(back ?? home, request.url)), active, secret);
   }
   if (active) {
-    const home = homeFor(active.role, authMode(active));
+    const home = homeFor(active.role);
+    if (isRetired(pathname)) return NextResponse.redirect(new URL(home, request.url));
     const area = AREAS.find((a) => pathname === a.prefix || pathname.startsWith(`${a.prefix}/`));
     if (area && active.role !== area.role) {
       return NextResponse.redirect(new URL(home, request.url));
     }
-    // The money screens need an API-key session; the gateway refuses the rest.
-    const moneyScreen = !pathname.startsWith("/admin") && !pathname.startsWith("/tenant-admin") && pathname !== NO_ACCESS;
-    if (moneyScreen && home !== "/dashboard") {
-      return NextResponse.redirect(new URL(home, request.url));
-    }
-    if (pathname === NO_ACCESS && home !== NO_ACCESS) {
+    // Everything outside /admin is a tenant's own screen, except the shared
+    // integration guide, which staff use to onboard a tenant's developers.
+    const tenantScreen = pathname !== "/admin" && !pathname.startsWith("/admin/") && pathname !== "/developers";
+    if (tenantScreen && !handlesMoney(active.role)) {
       return NextResponse.redirect(new URL(home, request.url));
     }
     return await withRenewal(NextResponse.next(), active, secret);

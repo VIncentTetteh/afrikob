@@ -33,19 +33,25 @@ type Decision = { request: ApprovalRequest; approve: boolean } | null;
 interface Props {
   scope: ApprovalScope;
   description: string;
+  /** Staff only: show one tenant's requests (the list endpoint takes no tenant filter). */
+  tenantId?: string;
 }
 
 /**
  * Where actions held for a second pair of eyes come to rest. Afrikob staff and
  * a tenant's own admin get the same inbox at their own scope.
  */
-export function ApprovalsInbox({ scope, description }: Props) {
+export function ApprovalsInbox({ scope, description, tenantId }: Props) {
   const [status, setStatus] = useState("");
   const approvals = useApprovals(scope, status || undefined);
   const { data: session } = useSession();
   const [viewing, setViewing] = useState<ApprovalRequest | null>(null);
   const [decision, setDecision] = useState<Decision>(null);
   const canDecide = session?.canCheck ?? true;
+  const rows = useMemo(
+    () => (tenantId ? (approvals.data ?? []).filter((a) => a.tenantId === tenantId) : (approvals.data ?? [])),
+    [approvals.data, tenantId],
+  );
 
   const columns = useMemo<ColumnDef<ApprovalRequest, unknown>[]>(
     () => [
@@ -111,7 +117,7 @@ export function ApprovalsInbox({ scope, description }: Props) {
   return (
     <>
       <PageHeader
-        title="Approvals"
+        title={tenantId ? "Approval requests" : "Approvals"}
         description={description}
         actions={
           <Button variant="outline" onClick={() => approvals.refetch()} loading={approvals.isRefetching}>
@@ -131,7 +137,7 @@ export function ApprovalsInbox({ scope, description }: Props) {
       <Ledger
         tableId={`approvals-${scope}`}
         columns={columns}
-        data={approvals.data ?? []}
+        data={rows}
         loading={approvals.isLoading}
         error={approvals.error}
         onRetry={() => approvals.refetch()}

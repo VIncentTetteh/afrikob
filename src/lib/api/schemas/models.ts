@@ -8,7 +8,16 @@ import { findArray } from "./normalize";
  */
 
 const str = z.string().nullish().transform((v) => v ?? null);
-const num = z.coerce.number().nullish().transform((v) => (v == null || Number.isNaN(v) ? null : v));
+/**
+ * A number from the gateway, which sends some as strings ("10.00"). Anything
+ * that is not a finite number (blank, "N/A", true) reads as null, never as 0:
+ * a missing balance must not look like an empty one.
+ */
+const num = z.unknown().optional().transform((v): number | null => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && /^\s*-?\d+(\.\d+)?\s*$/.test(v)) return Number(v);
+  return null;
+});
 const flag = z.boolean().nullish().transform((v) => v ?? false);
 const id = z.string().nullish().transform((v) => v ?? "");
 

@@ -66,7 +66,8 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeSync />
       <UnauthorizedRedirect />
       {children}
-      <Toaster position="top-right" richColors closeButton />
+      {/* Clear the sticky command bar (h-14 / sm:h-16) so a toast never hides the account menu. */}
+      <Toaster position="top-right" offset={{ top: 80, right: 16 }} mobileOffset={{ top: 64, left: 12, right: 12 }} richColors closeButton />
     </QueryClientProvider>
   );
 }

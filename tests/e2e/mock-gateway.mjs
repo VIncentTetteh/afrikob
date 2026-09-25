@@ -1,5 +1,6 @@
 // Stateful stand-in for the Afrikob gateway used by Playwright runs.
-// Mirrors Swagger v1: session-cookie portal auth for staff, API-key + JWT for tenants.
+// Mirrors Swagger v1: everyone signs in to the portal with a session cookie;
+// an API key only mints a JWT for a tenant's own systems (auth/token).
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 
@@ -244,6 +245,7 @@ function identify(req) {
         kind: "portal",
         user,
         role: user.isPlatformAdmin ? "admin" : "tenant",
+        tenantId: user.tenantId ?? null,
         isTenantAdmin: Boolean(user.isTenantAdmin),
       };
     }
@@ -547,20 +549,25 @@ http
       return void res.end(csvFor(download[1]));
     }
 
-    const route = routes.find(([method, re]) => method === req.method && re.test(path));
+    // tenant/payments/* and tenant/transactions* are the portal's copies of the
+    // money endpoints: same handlers, but for a tenant user's portal session.
+    const portalMoney = /^tenant\/(payments\/|transactions)/.test(path);
+    const target = portalMoney ? path.slice("tenant/".length) : path;
+    const route = routes.find(([method, re]) => method === req.method && re.test(target));
     if (!route) return send(res, 404, problem("Not Found", "No such endpoint."));
     if (!path.startsWith("portal/auth/") && path !== "auth/token") {
       const who = identify(req);
       if (!who) return send(res, 403, fail("Access denied"));
       if (path.startsWith("admin/") && who.role !== "admin") return send(res, 403, fail("Access denied"));
       if (path.startsWith("tenant-admin/") && !who.isTenantAdmin) return send(res, 403, fail("Access denied"));
-      // The live gateway answers 401 on money for a portal session: only the
-      // bearer token minted from an API key carries tenant context.
+      // As on the live gateway: the unprefixed money endpoints answer only an
+      // API-key token, and the tenant/ copies only a tenant user's portal session.
       const money = path.startsWith("payments/") || path.startsWith("transactions");
       if (money && who.kind !== "apikey") return send(res, 401, fail("Unauthorized"));
+      if (portalMoney && (who.kind !== "portal" || !who.tenantId)) return send(res, 401, fail("Unauthorized"));
     }
     const body = await readBody(req).catch(() => ({}));
-    const [status, payload, headers] = route[2](req, path.match(route[1]), body, url);
+    const [status, payload, headers] = route[2](req, target.match(route[1]), body, url);
     send(res, status, payload, headers);
   })
   .listen(PORT, () => console.log(`mock gateway on :${PORT}`));

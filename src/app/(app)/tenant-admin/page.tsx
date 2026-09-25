@@ -107,7 +107,7 @@ export default function TenantAdminPage() {
                     label: "Name checks",
                     value: detail?.requireNameVerification ? (
                       <span className="inline-flex items-center gap-1.5 text-settled">
-                        <BadgeCheck className="size-4" aria-hidden /> Required before a payout
+                        <BadgeCheck className="size-4" aria-hidden /> Required before a disbursement
                       </span>
                     ) : (
                       "Optional"

@@ -39,15 +39,16 @@ describe("request schemas", () => {
   });
 
   it("validates mobile wallet numbers for collections and drops empty optional names", () => {
-    const base = { clientTransactionId: "C", walletNumber: "+233241234567", institutionCode: "MTN", amount: 1, reference: "r", walletName: "" };
+    const base = { clientTransactionId: "COL-1", walletNumber: "+233241234567", institutionCode: "MTN", amount: 1, reference: "r", walletName: "" };
     expect(collectionSchema.parse(base).walletName).toBeUndefined();
     expect(collectionSchema.safeParse({ ...base, walletNumber: "abc" }).success).toBe(false);
   });
 
   it("validates tenant codes and defaults RPM", () => {
-    const out = createTenantSchema.parse({ code: "AFK-1", legalName: "L", displayName: "D" });
+    const out = createTenantSchema.parse({ code: "afk-1", legalName: "Afikob Ltd", displayName: "Afikob" });
+    expect(out.code).toBe("AFK-1");
     expect(out.requestsPerMinute).toBe(60);
-    expect(createTenantSchema.safeParse({ code: "bad code!", legalName: "L", displayName: "D" }).success).toBe(false);
+    expect(createTenantSchema.safeParse({ code: "bad code!", legalName: "Afikob Ltd", displayName: "Afikob" }).success).toBe(false);
   });
 
   it("bounds fee percentages and approval counts", () => {

@@ -23,6 +23,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Select } from "@/components/ui/input";
 import { useTransactions } from "@/lib/api/hooks";
+import { TENANT_REFUNDS_AVAILABLE } from "@/lib/api/features";
+import { useCanMake } from "@/lib/api/session";
 import type { Transaction, TransactionKind } from "@/lib/api/schemas/models";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { formatNumber } from "@/lib/format";
@@ -40,12 +42,15 @@ interface Props {
   emptyDescription?: string;
 }
 
-/** Paged, filterable ledger shared by Collections, Payouts and admin Transactions. */
+/** Paged, filterable ledger shared by Collections, Disbursements and admin Transactions. */
 export function LedgerView({ title, description, kind, noun, heroLabel, allowRefunds, actions, emptyDescription }: Props) {
   const [page, setPage] = useState(1);
   const [size, setSize] = useState(DEFAULT_PAGE_SIZE);
   const [filters, setFilters] = useState<TxFilters>(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
+  const canMake = useCanMake();
+  // Requesting a refund is a submission, so it follows the maker permission.
+  const canRefund = TENANT_REFUNDS_AVAILABLE && Boolean(allowRefunds) && canMake;
   const [viewing, setViewing] = useState<Transaction | null>(null);
   const [refunding, setRefunding] = useState<Transaction | null>(null);
   const query = useTransactions(page, size);
@@ -56,8 +61,8 @@ export function LedgerView({ title, description, kind, noun, heroLabel, allowRef
   const currency = pageItems[0]?.currency ?? "GHS";
 
   const columns = useMemo(
-    () => transactionColumns({ onView: setViewing, onRefund: allowRefunds ? setRefunding : undefined }),
-    [allowRefunds],
+    () => transactionColumns({ onView: setViewing, onRefund: canRefund ? setRefunding : undefined }),
+    [canRefund],
   );
 
   const exportCsv = () => {
@@ -134,7 +139,7 @@ export function LedgerView({ title, description, kind, noun, heroLabel, allowRef
         transaction={viewing}
         onOpenChange={(o) => !o && setViewing(null)}
         onRefund={
-          allowRefunds
+          canRefund
             ? (t) => {
                 setViewing(null);
                 setRefunding(t);
@@ -142,7 +147,7 @@ export function LedgerView({ title, description, kind, noun, heroLabel, allowRef
             : undefined
         }
       />
-      {allowRefunds && <RefundRequestDialog transaction={refunding} onOpenChange={(o) => !o && setRefunding(null)} />}
+      {canRefund && <RefundRequestDialog transaction={refunding} onOpenChange={(o) => !o && setRefunding(null)} />}
     </>
   );
 }

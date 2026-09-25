@@ -8,40 +8,21 @@ import { envelopeError, readUpstreamBody, upstreamMessage } from "@/lib/server/r
 import { buildPortalSession, type LoginOutcome } from "@/lib/server/portal-session";
 import { clearPendingLogin, nowSeconds, PENDING_LOGIN_SECONDS, writePendingLogin, writeSession } from "@/lib/server/session";
 import { callUpstream } from "@/lib/server/upstream";
-import { extractToken, inspectToken } from "@/lib/session/claims";
 import { readSetCookies, toCookieHeader } from "@/lib/session/cookies";
 import { readPortalUser } from "@/lib/session/portal";
-import { toPublicSession, type Role, type SessionData } from "@/lib/session/types";
+import { toPublicSession } from "@/lib/session/types";
+import { emailAddress } from "@/lib/validation/fields";
 
 const LOGIN_ATTEMPTS_PER_WINDOW = 10;
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;
-const MIN_API_KEY_LENGTH = 8;
-const MAX_API_KEY_LENGTH = 512;
 const MAX_PASSWORD_LENGTH = 256;
 
-const credentialsSchema = z.union([
-  z.object({
-    env: z.enum(API_ENVIRONMENTS),
-    email: z.email("Enter a valid email address"),
-    password: z.string().min(1, "Enter your password").max(MAX_PASSWORD_LENGTH),
-  }),
-  z.object({
-    env: z.enum(API_ENVIRONMENTS),
-    apiKey: z.string().trim().min(MIN_API_KEY_LENGTH).max(MAX_API_KEY_LENGTH),
-  }),
-]);
-
-/** Confirms platform scope by probing a staff-only read when JWT claims are inconclusive. */
-async function probeRole(env: ApiEnvironment, jwt: string): Promise<Role> {
-  const res = await callUpstream({
-    env,
-    method: "GET",
-    path: "admin/tenants",
-    headers: { Authorization: `Bearer ${jwt}` },
-  });
-  await res.body?.cancel();
-  return res.ok ? "platform" : "tenant";
-}
+/** Everyone signs in with email and password; API keys never open a portal session. */
+const credentialsSchema = z.object({
+  env: z.enum(API_ENVIRONMENTS),
+  email: emailAddress,
+  password: z.string().min(1, "Enter your password").max(MAX_PASSWORD_LENGTH),
+});
 
 /**
  * Portal password step. The gateway emails a one-time code and returns
@@ -98,33 +79,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-/** API-key login: exchanged for a bearer JWT that carries its own expiry. */
-async function apiKeyLogin(env: ApiEnvironment, apiKey: string, requestId: string): Promise<LoginOutcome> {
-  const res = await callUpstream({ env, method: "POST", path: "auth/token", headers: { "X-API-Key": apiKey } });
-  const { json } = await readUpstreamBody(res);
-  const jwt = res.ok ? extractToken(json) : null;
-  if (!jwt) {
-    const status = res.status === 403 || res.status === 401 || res.ok ? 401 : 502;
-    return { error: envelopeError(status, upstreamMessage(json, "This API key was not accepted."), { requestId }) };
-  }
-  const iat = nowSeconds();
-  const insights = inspectToken(jwt, iat);
-  const role: Role = insights.roleHint === "platform" ? "platform" : await probeRole(env, jwt);
-  const session: SessionData = {
-    credential: { kind: "bearer", jwt },
-    role,
-    env,
-    tenantId: insights.tenantId,
-    userId: null,
-    label: insights.label,
-    canMake: true,
-    canCheck: true,
-    iat,
-    exp: insights.exp,
-  };
-  return { session };
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const requestId = crypto.randomUUID();
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -133,7 +87,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const parsed = credentialsSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return envelopeError(400, "Enter your email and password, or an API key.", { requestId });
+  if (!parsed.success) return envelopeError(400, "Enter your email and password.", { requestId });
   const credentials = parsed.data;
   if (!availableEnvironments().includes(credentials.env)) {
     return envelopeError(400, `The ${credentials.env} environment is not configured.`, { requestId });
@@ -141,12 +95,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     await clearPendingLogin();
-    const result =
-      "apiKey" in credentials
-        ? await apiKeyLogin(credentials.env, credentials.apiKey, requestId)
-        : await portalLogin(credentials.env, credentials.email, credentials.password, requestId);
+    const result = await portalLogin(credentials.env, credentials.email, credentials.password, requestId);
     if (result.error) {
-      logger.warn("login rejected", { requestId, env: credentials.env, mode: "apiKey" in credentials ? "apikey" : "portal" });
+      logger.warn("login rejected", { requestId, env: credentials.env });
       return result.error;
     }
     if (result.pending) return NextResponse.json(result.pending);

@@ -6,7 +6,7 @@ import { EmptyState, ErrorState } from "@/components/domain/feedback";
 import { KeyValueList, recordToItems } from "@/components/domain/key-value-list";
 import { PageHeader } from "@/components/domain/page-header";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
+import { Field, InlineAction, Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/ui/panel";
 import { State } from "@/components/ui/state";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,13 +38,18 @@ function Lookup({ id, label, placeholder, onSubmit }: { id: string; label: strin
   return (
     <Panel>
       <PanelBody>
-        <form onSubmit={submit} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <Field label={label} htmlFor={id} className="flex-1">
-            <Input id={id} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} />
+        <form onSubmit={submit}>
+          <Field label={label} htmlFor={id}>
+            <InlineAction
+              action={
+                <Button type="submit">
+                  <Search /> Find
+                </Button>
+              }
+            >
+              <Input id={id} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" maxLength={64} />
+            </InlineAction>
           </Field>
-          <Button type="submit">
-            <Search /> Find
-          </Button>
         </form>
       </PanelBody>
     </Panel>

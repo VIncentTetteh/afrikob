@@ -7,7 +7,9 @@ import { FeesPanel } from "@/components/admin/fees-panel";
 import { IssueCredentialPanel } from "@/components/admin/issue-credential";
 import { PoliciesPanel } from "@/components/admin/policies-panel";
 import { PeoplePanel } from "@/components/people/people-panel";
+import { ReportView } from "@/components/admin/report-view";
 import { WalletPanel } from "@/components/admin/wallet-panel";
+import { ApprovalsInbox } from "@/components/approvals/approvals-inbox";
 import { KeyValueList, recordToItems } from "@/components/domain/key-value-list";
 import { PageHeader } from "@/components/domain/page-header";
 import { buttonVariants } from "@/components/ui/button";
@@ -34,13 +36,21 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
       <Tabs defaultValue="wallet" className="space-y-5">
         <TabsList>
           <TabsTrigger value="wallet">Wallet</TabsTrigger>
-          <TabsTrigger value="fees">Fees</TabsTrigger>
-          <TabsTrigger value="keys">API keys</TabsTrigger>
+          <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <TabsTrigger value="requests">Approval requests</TabsTrigger>
           <TabsTrigger value="people">People</TabsTrigger>
-          <TabsTrigger value="approvals">Approvals</TabsTrigger>
+          <TabsTrigger value="fees">Fees</TabsTrigger>
+          <TabsTrigger value="approvals">Approval rules</TabsTrigger>
+          <TabsTrigger value="keys">Integration keys</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
         </TabsList>
         <TabsContent value="wallet">{session && <WalletPanel tenantId={tenantId} session={session} />}</TabsContent>
+        <TabsContent value="transactions" className="space-y-5">
+          <ReportView tenantId={tenantId} />
+        </TabsContent>
+        <TabsContent value="requests" className="space-y-5">
+          <ApprovalsInbox scope="platform" tenantId={tenantId} description="What this tenant's people submitted for a second pair of eyes" />
+        </TabsContent>
         <TabsContent value="fees">
           <FeesPanel tenantId={tenantId} />
         </TabsContent>

@@ -111,7 +111,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
             heroNote={batch ? `${batch.status ?? "Submitted"} · ${formatDate(batch.createdAt)}` : undefined}
             loading={detail.isLoading}
             figures={[
-              { label: "Payouts", value: formatNumber(batch?.itemCount ?? items.length) },
+              { label: "Disbursements", value: formatNumber(batch?.itemCount ?? items.length) },
               { label: "Settled", value: formatNumber(tally.success), tone: "settled" },
               { label: "In flight", value: formatNumber(tally.pending), tone: "pending" },
               { label: "Failed", value: formatNumber(tally.failed), tone: tally.failed > 0 ? "failed" : "default" },
@@ -129,8 +129,8 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
             loading={detail.isLoading}
             getRowId={(i, index) => i.clientTransactionId ?? String(index)}
             getDirection={() => "out"}
-            emptyTitle="No payouts in this batch"
-            emptyDescription="The gateway has not returned the individual payouts yet."
+            emptyTitle="No disbursements in this batch"
+            emptyDescription="The gateway has not returned the individual disbursements yet."
           />
         </>
       )}
@@ -147,7 +147,7 @@ export default function BatchDetailPage({ params }: { params: Promise<{ batchId:
             />
             {status.data.items.length > 0 && (
               <section>
-                <h3 className="mb-1 text-sm font-medium">Per payout</h3>
+                <h3 className="mb-1 text-sm font-medium">Per disbursement</h3>
                 <ul className="divide-y divide-line">
                   {status.data.items.map((item, index) => (
                     <li key={item.clientTransactionId ?? index} className="flex items-baseline justify-between gap-3 py-2.5 text-sm">

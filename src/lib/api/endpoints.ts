@@ -1,4 +1,4 @@
-import { download, request, requestResult } from "./client";
+import { download, request, requestOutcome, requestResult } from "./client";
 import {
   approvalPolicyListSchema,
   approvalPolicySchema,
@@ -162,37 +162,46 @@ export const refundsApi = {
     request("GET", `payments/refunds/${enc(refundId)}`, { schema: refundSchema, signal }),
 };
 
+/**
+ * Where a tenant user's portal session reaches their money. The gateway serves
+ * the unprefixed `payments/*` and `transactions*` only to an API-key bearer token
+ * (a tenant's own integration); the portal has its own copies under `tenant/`.
+ * If the gateway moves them again, this is the one place to change the client.
+ */
+export const TENANT = "tenant/";
+
 export const transactionsApi = {
   list: (page: number, size: number, signal?: AbortSignal) =>
-    request("GET", "transactions", { query: { page, size }, schema: transactionListSchema, signal }),
+    request("GET", `${TENANT}transactions`, { query: { page, size }, schema: transactionListSchema, signal }),
   get: (id: string, signal?: AbortSignal) =>
-    request("GET", `transactions/${enc(id)}`, { schema: transactionSchema, signal }),
+    request("GET", `${TENANT}transactions/${enc(id)}`, { schema: transactionSchema, signal }),
 };
 
 export const paymentsApi = {
-  telcos: (signal?: AbortSignal) => request("GET", "payments/get-all-telcos", { schema: institutionListSchema, signal }),
-  banks: (signal?: AbortSignal) => request("GET", "payments/get-all-banks", { schema: institutionListSchema, signal }),
-  verifyName: (body: Req.NameVerify) => request("POST", "payments/verify-name", { body, schema: nameVerifySchema }),
-  statusCheck: (body: Req.StatusCheck) => request("POST", "payments/status-check", { body, schema: gatewayStatusSchema }),
-  disburse: (body: Req.Disbursement) => request("POST", "payments/disbursement", { body, schema: gatewayResponseSchema }),
-  collect: (body: Req.Collection) => request("POST", "payments/collection", { body, schema: gatewayResponseSchema }),
+  telcos: (signal?: AbortSignal) => request("GET", `${TENANT}payments/get-all-telcos`, { schema: institutionListSchema, signal }),
+  banks: (signal?: AbortSignal) => request("GET", `${TENANT}payments/get-all-banks`, { schema: institutionListSchema, signal }),
+  verifyName: (body: Req.NameVerify) => request("POST", `${TENANT}payments/verify-name`, { body, schema: nameVerifySchema }),
+  statusCheck: (body: Req.StatusCheck) => request("POST", `${TENANT}payments/status-check`, { body, schema: gatewayStatusSchema }),
+  disburse: (body: Req.Disbursement) =>
+    requestOutcome("POST", `${TENANT}payments/disbursement`, { body, schema: gatewayResponseSchema }),
+  collect: (body: Req.Collection) => requestOutcome("POST", `${TENANT}payments/collection`, { body, schema: gatewayResponseSchema }),
   disbursementBalance: (currency = DEFAULT_CURRENCY, signal?: AbortSignal) =>
-    request("GET", "payments/disbursement-balance", { query: { currency }, schema: walletBalanceSchema, signal }),
+    request("GET", `${TENANT}payments/disbursement-balance`, { query: { currency }, schema: walletBalanceSchema, signal }),
   collectionBalance: (currency = DEFAULT_CURRENCY, signal?: AbortSignal) =>
-    request("GET", "payments/collection-balance", { query: { currency }, schema: walletBalanceSchema, signal }),
+    request("GET", `${TENANT}payments/collection-balance`, { query: { currency }, schema: walletBalanceSchema, signal }),
   bulkNameVerify: (body: Req.BulkNameVerify) =>
-    request("POST", "payments/bulk-name-verify", { body, schema: bulkNameVerifySchema }),
+    request("POST", `${TENANT}payments/bulk-name-verify`, { body, schema: bulkNameVerifySchema }),
   createBulk: (body: Req.BulkDisbursement, clientBatchId: string) =>
-    request("POST", "payments/bulk-disbursements", {
+    requestOutcome("POST", `${TENANT}payments/bulk-disbursements`, {
       body,
       headers: { ClientBatchId: clientBatchId },
       schema: batchSchema,
     }),
-  listBulk: (signal?: AbortSignal) => request("GET", "payments/bulk-disbursements", { schema: batchListSchema, signal }),
+  listBulk: (signal?: AbortSignal) => request("GET", `${TENANT}payments/bulk-disbursements`, { schema: batchListSchema, signal }),
   getBulk: (batchId: string, signal?: AbortSignal) =>
-    request("GET", `payments/bulk-disbursements/${enc(batchId)}`, { schema: batchDetailSchema, signal }),
+    request("GET", `${TENANT}payments/bulk-disbursements/${enc(batchId)}`, { schema: batchDetailSchema, signal }),
   reconcileBulk: (batchId: string) =>
-    request("POST", `payments/bulk-disbursements/${enc(batchId)}/reconcile`, { schema: batchSchema }),
+    request("POST", `${TENANT}payments/bulk-disbursements/${enc(batchId)}/reconcile`, { schema: batchSchema }),
   bulkStatus: (body: Req.BulkStatus) =>
-    request("POST", "payments/bulk-disbursement-status", { body, schema: batchStatusSchema }),
+    request("POST", `${TENANT}payments/bulk-disbursement-status`, { body, schema: batchStatusSchema }),
 };

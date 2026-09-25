@@ -2,16 +2,22 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { InstitutionSelect } from "./institution-select";
-import { ResultPanel } from "./result-panel";
+import { toast } from "sonner";
+import { ResultPanel, toastFor } from "./result-panel";
 import { ConfirmDialog } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { Field, Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { useCollect } from "@/lib/api/hooks";
 import { collectionSchema, newClientTransactionId, type Collection, type CollectionInput } from "@/lib/api/schemas/requests";
 import { formatMoney } from "@/lib/format";
+
+/** Mobile money wallets here are Ghanaian. */
+const GHANA_ONLY = ["GH"] as const;
 
 const blank = (): CollectionInput => ({
   clientTransactionId: newClientTransactionId("COL"),
@@ -59,26 +65,32 @@ export function CollectionSheet({ open, onOpenChange }: { open: boolean; onOpenC
         }
       >
         {collect.isSuccess ? (
-          <ResultPanel title="Charge sent to the customer" data={collect.data} />
+          <ResultPanel outcome={collect.data} />
         ) : (
           <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={form.handleSubmit(setPending)} noValidate>
             <Field label="Network" htmlFor="c-inst" error={e.institutionCode?.message}>
               <InstitutionSelect id="c-inst" include="telcos" {...form.register("institutionCode")} />
             </Field>
             <Field label="Wallet number" htmlFor="c-wallet" error={e.walletNumber?.message}>
-              <Input id="c-wallet" inputMode="tel" placeholder="0241234567" {...form.register("walletNumber")} />
+              <Controller
+                control={form.control}
+                name="walletNumber"
+                render={({ field, fieldState }) => (
+                  <PhoneInput id="c-wallet" countries={GHANA_ONLY} value={field.value} onChange={field.onChange} onBlur={field.onBlur} invalid={Boolean(fieldState.error)} />
+                )}
+              />
             </Field>
             <Field label="Wallet name" htmlFor="c-name" error={e.walletName?.message} hint="Optional">
-              <Input id="c-name" {...form.register("walletName")} />
+              <Input id="c-name" autoComplete="off" maxLength={150} {...form.register("walletName")} />
             </Field>
             <Field label="Amount (GHS)" htmlFor="c-amount" error={e.amount?.message}>
-              <Input id="c-amount" type="number" step="0.01" min="0" inputMode="decimal" {...form.register("amount")} />
+              <MoneyInput id="c-amount" aria-invalid={Boolean(e.amount) || undefined} {...form.register("amount")} />
             </Field>
             <Field label="Reference" htmlFor="c-ref" error={e.reference?.message} className="sm:col-span-2" hint="What the customer is paying for.">
-              <Input id="c-ref" placeholder="Invoice 1042" {...form.register("reference")} />
+              <Input id="c-ref" placeholder="Invoice 1042" autoComplete="off" maxLength={100} {...form.register("reference")} />
             </Field>
             <Field label="Your reference" htmlFor="c-ctid" error={e.clientTransactionId?.message} className="sm:col-span-2" hint="Generated for you; must be unique.">
-              <Input id="c-ctid" {...form.register("clientTransactionId")} />
+              <Input id="c-ctid" autoComplete="off" spellCheck={false} maxLength={64} className="font-mono" {...form.register("clientTransactionId")} />
             </Field>
           </form>
         )}
@@ -96,7 +108,16 @@ export function CollectionSheet({ open, onOpenChange }: { open: boolean; onOpenC
         }
         confirmLabel="Send charge"
         loading={collect.isPending}
-        onConfirm={() => pending && collect.mutate(pending, { onSettled: () => setPending(null) })}
+        onConfirm={() =>
+          pending &&
+          collect.mutate(pending, {
+            onSuccess: (outcome) => {
+              const [kind, message] = toastFor(outcome);
+              toast[kind](message);
+            },
+            onSettled: () => setPending(null),
+          })
+        }
       />
     </>
   );

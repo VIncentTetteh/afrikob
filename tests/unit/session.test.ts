@@ -1,11 +1,10 @@
 // @vitest-environment node
-import { EncryptJWT, SignJWT } from "jose";
+import { EncryptJWT } from "jose";
 import { describe, expect, it } from "vitest";
-import { extractToken, inspectToken } from "@/lib/session/claims";
 import { mergeCookies, readSetCookies, toCookieHeader } from "@/lib/session/cookies";
 import { readPortalUser, toIdentity, withTenantAdmin } from "@/lib/session/portal";
 import { sealSession, unsealSession } from "@/lib/session/seal";
-import { authMode, toPublicSession, type SessionData } from "@/lib/session/types";
+import { toPublicSession, type SessionData } from "@/lib/session/types";
 
 const SECRET = "unit-test-secret-unit-test-secret-000";
 const now = Math.floor(Date.now() / 1000);
@@ -23,14 +22,17 @@ const portalSession: SessionData = {
   exp: now + 600,
 };
 
-const tenantSession: SessionData = { ...portalSession, credential: { kind: "bearer", jwt: "a.b.c" }, role: "tenant", userId: null };
-
-async function jwt(claims: Record<string, unknown>): Promise<string> {
-  return new SignJWT(claims).setProtectedHeader({ alg: "HS256" }).sign(new TextEncoder().encode("k".repeat(32)));
-}
+const tenantSession: SessionData = {
+  ...portalSession,
+  credential: { kind: "cookie", cookie: "afk.portal=tenant" },
+  role: "tenant",
+  tenantId: "ten-1",
+  userId: "usr-2",
+  canCheck: false,
+};
 
 describe("session sealing", () => {
-  it("round-trips both credential kinds", async () => {
+  it("round-trips staff and tenant sessions", async () => {
     expect(await unsealSession(await sealSession(portalSession, SECRET), SECRET)).toEqual(portalSession);
     expect(await unsealSession(await sealSession(tenantSession, SECRET), SECRET)).toEqual(tenantSession);
   });
@@ -52,11 +54,17 @@ describe("session sealing", () => {
     expect(await unsealSession(await forge({ ...portalSession, credential: { kind: "bearer", jwt: "" } }), SECRET)).toBeNull();
   });
 
+  it("signs out a session sealed back when merchants signed in with an API key", async () => {
+    const legacy = { ...tenantSession, credential: { kind: "bearer", jwt: "a.b.c" } };
+    expect(await unsealSession(await sealSession(legacy as unknown as SessionData, SECRET), SECRET)).toBeNull();
+  });
+
   it("never exposes the upstream credential to the browser", () => {
     const publicSession = toPublicSession(portalSession);
     expect(JSON.stringify(publicSession)).not.toContain("abc123");
-    expect(publicSession).toMatchObject({ mode: "portal", role: "platform", canCheck: true });
-    expect(authMode(tenantSession)).toBe("apikey");
+    expect(publicSession).toMatchObject({ role: "platform", canCheck: true });
+    expect(publicSession).not.toHaveProperty("credential");
+    expect(toPublicSession(tenantSession)).toMatchObject({ role: "tenant", tenantId: "ten-1", canMake: true, canCheck: false });
   });
 });
 
@@ -119,31 +127,5 @@ describe("portal identity", () => {
     expect(readPortalUser({ userId: "u2" })?.userId).toBe("u2");
     expect(readPortalUser({ data: null })).toBeNull();
     expect(readPortalUser("nope")).toBeNull();
-  });
-});
-
-describe("token claims (API-key sessions)", () => {
-  it("detects admin, tenant, label and expiry", async () => {
-    expect(inspectToken(await jwt({ role: "Admin" }), now).roleHint).toBe("platform");
-    expect(inspectToken(await jwt({ roles: ["viewer", "platform admin"] }), now).roleHint).toBe("platform");
-    expect(inspectToken(await jwt({ is_admin: true }), now).roleHint).toBe("platform");
-    const tenant = inspectToken(await jwt({ role: "merchant", tenantId: "ten-1", name: "Afikob API", exp: now + 900 }), now);
-    expect(tenant).toEqual({ roleHint: "tenant", tenantId: "ten-1", label: "Afikob API", exp: now + 900 });
-    const opaque = inspectToken("opaque", now);
-    expect(opaque.roleHint).toBeNull();
-    expect(opaque.exp).toBe(now + 900);
-  });
-
-  it("reads the tenant from the gateway's tenant_code claim", async () => {
-    // The live gateway issues tenant_code (T001), not a tenantId.
-    expect(inspectToken(await jwt({ tenant_code: "T001", sub: "key-1" }), now).tenantId).toBe("T001");
-  });
-
-  it("extracts a token from common response shapes", () => {
-    expect(extractToken({ accessToken: "t1" })).toBe("t1");
-    expect(extractToken({ data: { token: "t2" } })).toBe("t2");
-    expect(extractToken("x.y.z")).toBe("x.y.z");
-    expect(extractToken("not-a-jwt")).toBeNull();
-    expect(extractToken(42)).toBeNull();
   });
 });

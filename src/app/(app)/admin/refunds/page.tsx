@@ -16,6 +16,7 @@ import { State } from "@/components/ui/state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAdminRefunds, useRefundDecision } from "@/lib/api/hooks";
 import type { Refund } from "@/lib/api/schemas/models";
+import { completeRefundSchema, rejectRefundSchema } from "@/lib/api/schemas/requests";
 import { useSession } from "@/lib/api/session";
 import { display, formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -204,13 +205,14 @@ function RejectDialog({ action, onClose }: { action: Action; onClose: () => void
       tone="danger"
       loading={reject.isPending}
       onConfirm={() => {
-        if (!reason.trim()) {
-          toast.error("Give a reason so the tenant knows why.");
+        const parsed = rejectRefundSchema.safeParse({ reason });
+        if (!parsed.success) {
+          toast.error(parsed.error.issues[0]?.message ?? "Give a reason so the tenant knows why.");
           return;
         }
         if (refund)
           reject.mutate(
-            { id: refund.id, body: { reason: reason.trim() } },
+            { id: refund.id, body: parsed.data },
             {
               onSuccess: () => {
                 setReason("");
@@ -252,25 +254,23 @@ function CompleteDialog({ action, onClose }: { action: Action; onClose: () => vo
       confirmLabel={success ? "Mark as paid" : "Mark as failed"}
       tone={success ? "settle" : "danger"}
       loading={complete.isPending}
-      onConfirm={() =>
-        refund &&
-        complete.mutate(
-          {
-            id: refund.id,
-            body: {
-              success,
-              providerReference: providerReference.trim() || undefined,
-              providerNote: providerNote.trim() || undefined,
+      onConfirm={() => {
+        const parsed = completeRefundSchema.safeParse({ success, providerReference, providerNote });
+        if (!parsed.success) {
+          toast.error(parsed.error.issues[0]?.message ?? "Check the details");
+          return;
+        }
+        if (refund)
+          complete.mutate(
+            { id: refund.id, body: parsed.data },
+            {
+              onSuccess: () => {
+                reset();
+                onClose();
+              },
             },
-          },
-          {
-            onSuccess: () => {
-              reset();
-              onClose();
-            },
-          },
-        )
-      }
+          );
+      }}
     >
       <div role="radiogroup" aria-label="Outcome" className="grid grid-cols-2 gap-1 rounded-lg bg-field p-0.5">
         {[true, false].map((value) => (
@@ -286,8 +286,8 @@ function CompleteDialog({ action, onClose }: { action: Action; onClose: () => vo
           </button>
         ))}
       </div>
-      <Field label="Provider reference" htmlFor="c-ref">
-        <Input id="c-ref" value={providerReference} onChange={(e) => setRef(e.target.value)} maxLength={100} />
+      <Field label="Provider reference" htmlFor="c-ref" hint={success ? "Required for a paid refund" : "Optional"}>
+        <Input id="c-ref" autoComplete="off" value={providerReference} onChange={(e) => setRef(e.target.value)} maxLength={100} />
       </Field>
       <Field label="Note" htmlFor="c-note">
         <Textarea id="c-note" value={providerNote} onChange={(e) => setNote(e.target.value)} maxLength={500} />

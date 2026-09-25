@@ -63,3 +63,16 @@ export function Checkbox({ label, className, ...props }: InputHTMLAttributes<HTM
     </label>
   );
 }
+
+/**
+ * An input and its button on one line, inside a Field. The button sits beside
+ * the input itself, so a hint or error under the field can never push them apart.
+ */
+export function InlineAction({ children, action }: { children: ReactNode; action: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">{children}</div>
+      <div className="shrink-0">{action}</div>
+    </div>
+  );
+}

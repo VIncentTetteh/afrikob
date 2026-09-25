@@ -15,12 +15,13 @@ import { handlesMoney, type Environment } from "@/lib/session/types";
 import { cn } from "@/lib/utils";
 import { useUi } from "@/stores/ui";
 
+
 function Balances() {
   const collection = useBalance("collection");
   const disbursement = useBalance("disbursement");
   const entries = [
     { label: "Collections", query: collection, tone: "text-in" },
-    { label: "Payouts", query: disbursement, tone: "text-out" },
+    { label: "Disbursements", query: disbursement, tone: "text-out" },
   ];
   return (
     <dl className="hidden items-center gap-5 xl:flex">
@@ -88,14 +89,12 @@ export function CommandBar({ session }: { session: ClientSession }) {
       ? "Afrikob staff"
       : session.role === "tenant-admin"
         ? "Tenant admin"
-        : session.tenantId
-          ? `Tenant ${session.tenantId}`
-          : "Merchant";
+        : "Tenant user";
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-paper px-4 sm:h-16 sm:px-6">
       <Logo className="lg:hidden" />
-      {handlesMoney(session.mode) && <Balances />}
+      {handlesMoney(session.role) && <Balances />}
       <div className="ml-auto flex items-center gap-2">
         <EnvironmentSwitch session={session} />
         <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}>

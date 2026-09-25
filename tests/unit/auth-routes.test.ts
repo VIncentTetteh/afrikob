@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { SignJWT } from "jose";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { callUpstream, cookieJar, json } from "./server-harness";
@@ -21,9 +20,6 @@ const PORTAL_USER = {
   canCheck: false,
 };
 let ipCounter = 0;
-
-const token = (claims: Record<string, unknown>) =>
-  new SignJWT(claims).setProtectedHeader({ alg: "HS256" }).setExpirationTime("15m").sign(new TextEncoder().encode("k".repeat(32)));
 
 function post(handler: (r: NextRequest) => Promise<Response>, url: string, body: unknown, ip = `10.0.0.${++ipCounter}`) {
   return handler(
@@ -78,7 +74,7 @@ describe("portal login (email, password, then emailed code)", () => {
     );
     const res = await verifyRequest({ code: "654321" });
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ role: "platform", label: "Doris Bosompem", mode: "portal", canCheck: false });
+    expect(await res.json()).toMatchObject({ role: "platform", label: "Doris Bosompem", canCheck: false });
 
     // Arriving from a link on another site must still carry the session, so the
     // cookies are lax: strict would bounce a signed-in operator to /signin.
@@ -160,45 +156,56 @@ describe("portal login (email, password, then emailed code)", () => {
   });
 });
 
-describe("API-key login", () => {
-  it("exchanges the key for a bearer session and detects the role", async () => {
-    const jwt = await token({ role: "merchant", tenantId: "ten-9", name: "Afikob API" });
-    callUpstream
-      .mockResolvedValueOnce(json({ statusCode: 0, data: { accessToken: jwt } }))
-      .mockResolvedValueOnce(json({ statusCode: 1, message: "Access denied" }, 403));
-    const res = await loginRequest({ env: "test", apiKey: "tenant_key_9999" });
-    expect(await res.json()).toMatchObject({ role: "tenant", tenantId: "ten-9", mode: "apikey" });
-    expect(callUpstream.mock.calls[0][0]).toMatchObject({ path: "auth/token", headers: { "X-API-Key": "tenant_key_9999" } });
-    expect(callUpstream.mock.calls[1][0]).toMatchObject({ method: "GET", path: "admin/tenants" });
+const TENANT_USER = { ...PORTAL_USER, userId: "usr-7", email: "ama@shop.gh", displayName: "Ama Mensah", userType: "Tenant", tenantId: "ten-9", canCheck: true };
 
-    const session = await storedSession();
-    expect(session?.credential).toEqual({ kind: "bearer", jwt });
-    expect(JSON.stringify(session)).not.toContain("tenant_key_9999");
+/** Tenant users are created by an administrator and sign in exactly like staff. */
+describe("tenant sign-in (email, password, then emailed code)", () => {
+  async function signInTenant(isTenantAdmin: boolean) {
+    await startLogin();
+    callUpstream
+      .mockResolvedValueOnce(json({ statusCode: 0, data: TENANT_USER }, 200, { "set-cookie": "afk.portal=tenant; Path=/" }))
+      .mockResolvedValueOnce(isTenantAdmin ? json({ statusCode: 0, data: { id: "ten-9" } }) : json({ statusCode: 1 }, 403));
+    return verifyRequest({ code: "654321" });
+  }
+
+  it("signs an ordinary tenant user in to their own tenant", async () => {
+    const res = await signInTenant(false);
+    expect(await res.json()).toMatchObject({ role: "tenant", tenantId: "ten-9", label: "Ama Mensah", canMake: true, canCheck: true });
+    // Asked once whether the tenant-admin area answers to them, with the new cookie.
+    expect(callUpstream.mock.calls[2][0]).toMatchObject({ method: "GET", path: "tenant-admin/tenant", headers: { Cookie: "afk.portal=tenant" } });
+    expect((await storedSession())?.credential).toEqual({ kind: "cookie", cookie: "afk.portal=tenant" });
   });
 
-  it("rejects a key the gateway refuses, and surfaces gateway failures", async () => {
-    callUpstream.mockResolvedValueOnce(json({ statusCode: 1, message: "Access denied" }, 403));
-    expect((await loginRequest({ env: "test", apiKey: "wrong_key_123" })).status).toBe(401);
+  it("promotes a tenant user the gateway lets into tenant administration", async () => {
+    const res = await signInTenant(true);
+    expect(await res.json()).toMatchObject({ role: "tenant-admin", tenantId: "ten-9" });
+  });
 
-    callUpstream.mockResolvedValueOnce(json({ statusCode: 0, data: {} }));
-    expect((await loginRequest({ env: "test", apiKey: "no_token_key_1" })).status).toBe(401);
-
-    callUpstream.mockRejectedValueOnce(new Error("ECONNRESET"));
-    expect((await loginRequest({ env: "test", apiKey: "network_err_key" })).status).toBe(502);
+  it("no longer accepts an API key as a way in", async () => {
+    const res = await loginRequest({ env: "test", apiKey: "tenant_key_9999" });
+    expect(res.status).toBe(400);
+    expect((await res.json()).message).toBe("Enter your email and password.");
+    expect(callUpstream).not.toHaveBeenCalled();
     expect(cookieJar.size).toBe(0);
   });
 
-  it("rejects an environment that is not configured", async () => {
-    const res = await loginRequest({ env: "live", apiKey: "long_enough_key" });
+  it("rejects an environment that is not configured, and surfaces gateway failures", async () => {
+    const res = await loginRequest({ env: "live", email: "ama@shop.gh", password: "secret-pass" });
     expect(res.status).toBe(400);
     expect((await res.json()).message).toMatch(/live environment is not configured/);
     expect(callUpstream).not.toHaveBeenCalled();
+
+    callUpstream.mockRejectedValueOnce(new Error("ECONNRESET"));
+    expect((await loginRequest({ env: "test", email: "ama@shop.gh", password: "secret-pass" })).status).toBe(502);
+    expect(cookieJar.size).toBe(0);
   });
 
   it("rate limits repeated attempts from one address", async () => {
-    callUpstream.mockImplementation(async () => json({ message: "denied" }, 403));
+    callUpstream.mockImplementation(async () => json({ detail: "Incorrect email or password." }, 401));
     const statuses: number[] = [];
-    for (let i = 0; i < 11; i++) statuses.push((await loginRequest({ env: "test", apiKey: "brute_force_key" }, "9.9.9.9")).status);
+    for (let i = 0; i < 11; i++) {
+      statuses.push((await loginRequest({ env: "test", email: "ama@shop.gh", password: "guess" }, "9.9.9.9")).status);
+    }
     expect(statuses.slice(0, 10).every((s) => s === 401)).toBe(true);
     expect(statuses[10]).toBe(429);
   });
@@ -222,8 +229,8 @@ describe("password reset", () => {
       env: "test",
       email: "ops@afrikob.com",
       code: "123456",
-      newPassword: "a-good-password",
-      confirmPassword: "a-good-password",
+      newPassword: "a-good-password1",
+      confirmPassword: "a-good-password1",
     });
     expect(reset.status).toBe(200);
     expect(callUpstream.mock.calls[2][0]).toMatchObject({ path: "portal/auth/reset-password" });
@@ -242,7 +249,7 @@ describe("password reset", () => {
       env: "test",
       email: "o@a.com",
       code: "123456",
-      newPassword: "a-good-password",
+      newPassword: "a-good-password1",
       confirmPassword: "different-password",
     });
     expect(mismatch.status).toBe(400);
@@ -270,7 +277,7 @@ describe("session and logout", () => {
 
     const res = await getSession();
     const body = await res.json();
-    expect(body).toMatchObject({ role: "platform", mode: "portal", env: "test", environments: ["test"] });
+    expect(body).toMatchObject({ role: "platform", env: "test", environments: ["test"] });
     expect(JSON.stringify(body)).not.toContain("abc123");
     expect(res.headers.get("cache-control")).toBe("no-store");
 

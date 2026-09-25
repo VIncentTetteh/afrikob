@@ -17,9 +17,9 @@ import { formatMoney, formatNumber } from "@/lib/format";
 const REPORT_DAYS = 30;
 
 const shortcuts = [
-  { href: "/admin/tenants", label: "Tenants", icon: Building2, text: "Onboard merchants, issue keys, fund wallets" },
+  { href: "/admin/tenants", label: "Tenants", icon: Building2, text: "Onboard merchants and their teams, issue integration keys, fund wallets" },
   { href: "/admin/refunds", label: "Refunds", icon: RotateCcw, text: "Approve, reject and settle refund requests" },
-  { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet, text: "Collections and payouts, filtered and exportable" },
+  { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet, text: "Collections and disbursements, filtered and exportable" },
   { href: "/admin/users", label: "People", icon: Users, text: "Who can sign in, and what they may do" },
   { href: "/admin/approval-policies", label: "Approvals", icon: ShieldCheck, text: "Actions that need a second pair of eyes" },
 ];
@@ -45,15 +45,15 @@ export default function AdminOverviewPage() {
     [],
   );
   const collections = useReport("collections", window);
-  const payouts = useReport("disbursements", window);
+  const disbursements = useReport("disbursements", window);
 
   const collectionRows = useMemo<ReportRow[]>(() => collections.data ?? [], [collections.data]);
-  const payoutRows = useMemo<ReportRow[]>(() => payouts.data ?? [], [payouts.data]);
-  const allRows = useMemo(() => [...collectionRows, ...payoutRows], [collectionRows, payoutRows]);
+  const disbursementRows = useMemo<ReportRow[]>(() => disbursements.data ?? [], [disbursements.data]);
+  const allRows = useMemo(() => [...collectionRows, ...disbursementRows], [collectionRows, disbursementRows]);
   const failed = allRows.filter((r) => statusTone(r.transactionStatus) === "failed").length;
   const waiting = (refunds.data ?? []).filter((r) => statusTone(r.status) === "pending").length;
-  const loading = collections.isLoading || payouts.isLoading;
-  const error = collections.error ?? payouts.error;
+  const loading = collections.isLoading || disbursements.isLoading;
+  const error = collections.error ?? disbursements.error;
 
   return (
     <>
@@ -63,7 +63,7 @@ export default function AdminOverviewPage() {
         heroLabel={`Collected in ${REPORT_DAYS} days`}
         heroAmount={settled(collectionRows)}
         heroCurrency={collectionRows[0]?.currency ?? "GHS"}
-        heroNote={`${formatMoney(settled(payoutRows), payoutRows[0]?.currency ?? "GHS")} paid out · ${formatNumber(failed)} failed`}
+        heroNote={`${formatMoney(settled(disbursementRows), disbursementRows[0]?.currency ?? "GHS")} disbursed · ${formatNumber(failed)} failed`}
         loading={loading}
         figures={[
           { label: "Tenants", value: formatNumber(tenants.data?.length) },
@@ -84,7 +84,7 @@ export default function AdminOverviewPage() {
                 error={error}
                 onRetry={() => {
                   void collections.refetch();
-                  void payouts.refetch();
+                  void disbursements.refetch();
                 }}
               />
             ) : (

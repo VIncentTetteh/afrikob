@@ -8,12 +8,13 @@ import { BalanceStrip } from "@/components/domain/balance-strip";
 import { ErrorState } from "@/components/domain/feedback";
 import { PageHeader } from "@/components/domain/page-header";
 import { CollectionSheet } from "@/components/payments/collection-dialog";
-import { PayoutSheet } from "@/components/payments/disbursement-dialog";
+import { DisbursementSheet } from "@/components/payments/disbursement-dialog";
 import { countByTone, directionOf } from "@/components/transactions/filters";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHeader, Skeleton } from "@/components/ui/panel";
 import { DirectionRail, State } from "@/components/ui/state";
 import { useBalance, useTransactions } from "@/lib/api/hooks";
+import { useCanMake } from "@/lib/api/session";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 
 const SAMPLE_SIZE = 100;
@@ -21,10 +22,11 @@ const RECENT_COUNT = 7;
 
 export default function OverviewPage() {
   const tx = useTransactions(1, SAMPLE_SIZE);
-  const payouts = useBalance("disbursement");
+  const disbursements = useBalance("disbursement");
   const collections = useBalance("collection");
   const [collectOpen, setCollectOpen] = useState(false);
-  const [payoutOpen, setPayoutOpen] = useState(false);
+  const [disbursementOpen, setDisbursementOpen] = useState(false);
+  const canMake = useCanMake();
   const items = useMemo(() => tx.data ?? [], [tx.data]);
   const counts = useMemo(() => countByTone(items), [items]);
 
@@ -34,27 +36,29 @@ export default function OverviewPage() {
         title="Overview"
         description="What moved, what is still moving, and what you can spend"
         actions={
-          <>
-            <Button variant="outline" onClick={() => setCollectOpen(true)}>
-              <ArrowDownLeft /> Collect
-            </Button>
-            <Button onClick={() => setPayoutOpen(true)}>
-              <ArrowUpRight /> Send money
-            </Button>
-          </>
+          canMake && (
+            <>
+              <Button variant="outline" onClick={() => setCollectOpen(true)}>
+                <ArrowDownLeft /> Collect
+              </Button>
+              <Button onClick={() => setDisbursementOpen(true)}>
+                <ArrowUpRight /> Send money
+              </Button>
+            </>
+          )
         }
       />
 
       <BalanceStrip
-        heroLabel="Available to pay out"
-        heroAmount={payouts.data?.availableBalance ?? payouts.data?.totalBalance ?? null}
-        heroCurrency={payouts.data?.currency}
+        heroLabel="Available to disburse"
+        heroAmount={disbursements.data?.availableBalance ?? disbursements.data?.totalBalance ?? null}
+        heroCurrency={disbursements.data?.currency}
         heroNote={
-          payouts.data?.reservedBalance
-            ? `${formatMoney(payouts.data.reservedBalance, payouts.data.currency)} reserved for payouts in flight`
+          disbursements.data?.reservedBalance
+            ? `${formatMoney(disbursements.data.reservedBalance, disbursements.data.currency)} reserved for disbursements in flight`
             : undefined
         }
-        loading={payouts.isLoading}
+        loading={disbursements.isLoading}
         figures={[
           {
             label: "Collections balance",
@@ -133,7 +137,7 @@ export default function OverviewPage() {
       </Panel>
 
       <CollectionSheet open={collectOpen} onOpenChange={setCollectOpen} />
-      <PayoutSheet open={payoutOpen} onOpenChange={setPayoutOpen} />
+      <DisbursementSheet open={disbursementOpen} onOpenChange={setDisbursementOpen} />
     </>
   );
 }

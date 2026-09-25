@@ -41,6 +41,8 @@ interface ConfirmDialogProps {
   confirmLabel: string;
   tone?: "primary" | "danger" | "settle";
   loading?: boolean;
+  /** Blocks confirming, e.g. when the amount exceeds the balance. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   children?: ReactNode;
 }
@@ -54,6 +56,7 @@ export function ConfirmDialog({
   confirmLabel,
   tone = "primary",
   loading,
+  confirmDisabled,
   onConfirm,
   children,
 }: ConfirmDialogProps) {
@@ -67,7 +70,7 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
             Cancel
           </Button>
-          <Button variant={tone} onClick={onConfirm} loading={loading}>
+          <Button variant={tone} onClick={onConfirm} loading={loading} disabled={confirmDisabled}>
             {confirmLabel}
           </Button>
         </>

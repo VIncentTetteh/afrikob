@@ -107,7 +107,7 @@ export function ResetFlow({ environments }: { environments: Environment[] }) {
       {step === "email" && (
         <form className="mt-6 space-y-4" noValidate onSubmit={sendCode}>
           <Field label="Email" htmlFor="reset-email" error={emailForm.formState.errors.email?.message}>
-            <Input id="reset-email" type="email" autoComplete="username" autoFocus {...emailForm.register("email")} />
+            <Input id="reset-email" type="email" autoComplete="username" autoFocus inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={254} {...emailForm.register("email")} />
           </Field>
           <Button type="submit" size="lg" className="w-full" loading={reset.isPending}>
             Send code
@@ -131,8 +131,13 @@ export function ResetFlow({ environments }: { environments: Environment[] }) {
 
       {step === "password" && (
         <form className="mt-6 space-y-4" noValidate onSubmit={setPassword}>
-          <Field label="New password" htmlFor="new-password" error={passwordForm.formState.errors.newPassword?.message}>
-            <Input id="new-password" type="password" autoComplete="new-password" autoFocus {...passwordForm.register("newPassword")} />
+          <Field
+            label="New password"
+            htmlFor="new-password"
+            error={passwordForm.formState.errors.newPassword?.message}
+            hint="At least 8 characters, with a letter and a number."
+          >
+            <Input id="new-password" type="password" autoComplete="new-password" autoFocus maxLength={128} {...passwordForm.register("newPassword")} />
           </Field>
           <Field label="Confirm password" htmlFor="confirm-password" error={passwordForm.formState.errors.confirmPassword?.message}>
             <Input id="confirm-password" type="password" autoComplete="new-password" {...passwordForm.register("confirmPassword")} />
