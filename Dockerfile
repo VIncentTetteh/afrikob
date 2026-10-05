@@ -12,7 +12,7 @@ COPY . .
 # Build-time placeholder only; the real secret is injected at runtime.
 RUN SESSION_SECRET=build-placeholder-build-placeholder-000 AFRIKOB_API_URL_TEST=https://placeholder.invalid npm run build
 
-FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runtime
+FROM gcr.io/distroless/nodejs22-debian13:nonroot AS runtime
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 COPY --from=build --chown=nonroot:nonroot /app/.next/standalone ./
