@@ -18,7 +18,7 @@ export const InstitutionSelect = forwardRef<HTMLSelectElement, Props>(({ include
 
   return (
     <Select ref={ref} disabled={loading || props.disabled} {...props}>
-      <option value="">{loading ? "Loading..." : "Choose one"}</option>
+      <option value="">{loading ? "Loading options…" : "Select an institution"}</option>
       {wantTelcos && (telcos.data?.length ?? 0) > 0 && (
         <optgroup label="Mobile money">
           {telcos.data?.map((i) => (

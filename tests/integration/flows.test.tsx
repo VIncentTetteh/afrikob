@@ -221,7 +221,7 @@ describe("Disbursements", () => {
     await user.type(screen.getByLabelText("Amount (GHS)"), "12.50");
     await user.click(screen.getByRole("button", { name: "Review" }));
     await user.click(await screen.findByRole("button", { name: "Send money" }));
-    await waitFor(() => expect(submitted).toMatchObject({ accountNumber: "0241234567", institutionCode: "MTN", amount: 12.5 }));
+    await waitFor(() => expect(submitted).toMatchObject({ accountNumber: "233241234567", institutionCode: "MTN", amount: 12.5 }));
   });
 
   it("rejects an amount with more than two decimals or an exponent", async () => {

@@ -2,7 +2,7 @@ import type { BulkNameVerifyResult } from "@/lib/api/schemas/models";
 import { bulkDisbursementItemSchema, newClientTransactionId, withDestination, type BulkDisbursementItem } from "@/lib/api/schemas/requests";
 
 export const BULK_TEMPLATE_HEADERS = ["accountNumber", "institutionCode", "accountName", "amount", "currency", "reference", "clientTransactionId"];
-export const BULK_TEMPLATE_SAMPLE = ["0241234567", "MTN", "Ama Mensah", "150.00", "GHS", "Salary Sept", ""];
+export const BULK_TEMPLATE_SAMPLE = ["233241234567", "MTN", "Ama Mensah", "150.00", "GHS", "Salary Sept", ""];
 
 const HEADER_ALIASES: Record<string, string> = {
   account: "accountNumber", accountno: "accountNumber", accountnumber: "accountNumber", walletnumber: "accountNumber", msisdn: "accountNumber",

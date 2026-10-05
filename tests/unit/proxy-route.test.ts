@@ -321,7 +321,7 @@ describe("server-side validation of writes", () => {
     const sent = JSON.parse((callUpstream.mock.calls[0][0] as { body: string }).body);
     expect(sent).toEqual({
       clientTransactionId: "COL-0002",
-      walletNumber: "0241234567",
+      walletNumber: "233241234567",
       institutionCode: "MTN",
       amount: 1250.5,
       currency: "GHS",

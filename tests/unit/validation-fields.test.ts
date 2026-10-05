@@ -57,9 +57,9 @@ describe("money", () => {
 });
 
 describe("phone numbers", () => {
-  it("normalises a Ghanaian mobile wallet to national form", () => {
+  it("normalises a Ghanaian mobile wallet to the API's 233-prefixed form", () => {
     for (const input of ["0241234567", "024 123 4567", "+233241234567", "+233 24 123 4567", "233241234567", "(024) 123-4567"]) {
-      expect(ok(ghanaMobile, input)).toBe("0241234567");
+      expect(ok(ghanaMobile, input)).toBe("233241234567");
     }
   });
 
@@ -67,9 +67,9 @@ describe("phone numbers", () => {
     bad(ghanaMobile, input),
   );
 
-  it("stores a contact number in E.164 from any country, and allows none", () => {
-    expect(ok(phoneNumber, "024 123 4567")).toBe("+233241234567");
-    expect(ok(phoneNumber, "+44 7911 123456")).toBe("+447911123456");
+  it("stores a contact number as international digits, and allows none", () => {
+    expect(ok(phoneNumber, "024 123 4567")).toBe("233241234567");
+    expect(ok(phoneNumber, "+44 7911 123456")).toBe("447911123456");
     expect(ok(phoneNumber, "")).toBeUndefined();
     bad(phoneNumber, "+233 12");
     bad(phoneNumber, "not a number");

@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   Gauge,
   Inbox,
+  Landmark,
   RotateCcw,
   SearchCheck,
   ShieldCheck,
@@ -55,6 +56,7 @@ const adminNav: NavSection[] = [
   { title: "Platform", items: [
     { href: "/admin", label: "Overview", icon: Gauge, primary: true },
     { href: "/admin/tenants", label: "Tenants", icon: Building2, primary: true },
+    { href: "/admin/wallets", label: "Wallets", icon: Landmark, primary: true },
     { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet, primary: true },
   ] },
   { title: "Controls", items: [

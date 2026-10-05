@@ -1,6 +1,7 @@
 "use client";
 
 import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
+import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COUNTRY } from "@/lib/validation/fields";
@@ -67,23 +68,26 @@ export function PhoneInput({ id, value, onChange, onBlur, countries, invalid, di
 
   return (
     <div className="flex min-w-0 gap-2">
-      <select
-        aria-label="Country code"
-        value={country}
-        disabled={disabled || locked}
-        onChange={(e) => {
-          const next = e.target.value as CountryCode;
-          setCountry(next);
-          onChange(join(next, national));
-        }}
-        className={cn(fieldBase, "w-28 shrink-0 appearance-none px-2.5", locked && "opacity-100")}
-      >
-        {options.map((o) => (
-          <option key={o.code} value={o.code}>
-            {o.code === country ? `${o.code} +${getCountryCallingCode(o.code)}` : o.label}
-          </option>
-        ))}
-      </select>
+      <span className="relative block w-28 shrink-0">
+        <select
+          aria-label="Select country code"
+          value={country}
+          disabled={disabled || locked}
+          onChange={(e) => {
+            const next = e.target.value as CountryCode;
+            setCountry(next);
+            onChange(join(next, national));
+          }}
+          className={cn(fieldBase, "w-full appearance-none px-2.5 pr-7", locked && "opacity-100")}
+        >
+          {options.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.code === country ? `${o.code} +${getCountryCallingCode(o.code)}` : o.label}
+            </option>
+          ))}
+        </select>
+        {!locked && <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-ink-soft" aria-hidden />}
+      </span>
       <input
         id={id}
         type="tel"

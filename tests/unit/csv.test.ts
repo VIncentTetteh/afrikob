@@ -50,7 +50,7 @@ describe("bulk rows", () => {
       ],
       TELCOS,
     );
-    expect(rows[0].item?.accountNumber).toBe("0241234567");
+    expect(rows[0].item?.accountNumber).toBe("233241234567");
     expect(rows[1].errors.join()).toMatch(/Ghanaian mobile/);
     expect(rows[2].item?.accountNumber).toBe("1234567890");
     expect(rows[3].errors.join()).toMatch(/2 decimal places/);

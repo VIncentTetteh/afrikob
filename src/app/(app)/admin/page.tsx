@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, FileSpreadsheet, RotateCcw, ShieldCheck, Users } from "lucide-react";
+import { Building2, FileSpreadsheet, Landmark, RotateCcw, ShieldCheck, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 import { VolumeChart } from "@/components/charts/volume-chart";
@@ -18,6 +18,7 @@ const REPORT_DAYS = 30;
 
 const shortcuts = [
   { href: "/admin/tenants", label: "Tenants", icon: Building2, text: "Onboard merchants and their teams, issue integration keys, fund wallets" },
+  { href: "/admin/wallets", label: "Wallets", icon: Landmark, text: "View collection and disbursement funds for every tenant" },
   { href: "/admin/refunds", label: "Refunds", icon: RotateCcw, text: "Approve, reject and settle refund requests" },
   { href: "/admin/reports", label: "Reports", icon: FileSpreadsheet, text: "Collections and disbursements, filtered and exportable" },
   { href: "/admin/users", label: "People", icon: Users, text: "Who can sign in, and what they may do" },

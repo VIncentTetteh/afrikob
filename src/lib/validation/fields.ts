@@ -162,18 +162,18 @@ export const isoDate = z
 
 export const DEFAULT_COUNTRY: CountryCode = "GH";
 
-/** Optional contact number in any country, stored in E.164 (+233241234567). */
+/** Optional contact number in any country, sent as international digits (233241234567). */
 export const phoneNumber = z
   .string()
   .trim()
   .transform((v) => v.replace(/[\s()-]/g, ""))
   .refine((v) => v === "" || isValidPhoneNumber(v, DEFAULT_COUNTRY), "Enter a valid phone number, with its country")
-  .transform((v) => (v ? (parsePhoneNumberFromString(v, DEFAULT_COUNTRY)?.number ?? v) : undefined))
+  .transform((v) => (v ? (parsePhoneNumberFromString(v, DEFAULT_COUNTRY)?.number ?? v).replace(/^\+/, "") : undefined))
   .optional();
 
 /**
  * A Ghanaian mobile money wallet. Accepts 024 123 4567, +233 24 123 4567 or
- * 233241234567, and sends the national form (0241234567) the gateway uses.
+ * 233241234567, and sends the 233-prefixed form required by the gateway.
  */
 export const ghanaMobile = z
   .string()
@@ -185,7 +185,7 @@ export const ghanaMobile = z
       ctx.addIssue({ code: "custom", message: "Enter a valid Ghanaian mobile number, like 024 123 4567" });
       return z.NEVER;
     }
-    return `0${parsed.nationalNumber}`;
+    return `${parsed.countryCallingCode}${parsed.nationalNumber}`;
   });
 
 /** A bank account number: digits only (spaces and dashes are removed), 6 to 20 long. */
