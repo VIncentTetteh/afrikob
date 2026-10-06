@@ -10,6 +10,8 @@ import { display, formatDate, formatMoney, humanize } from "@/lib/format";
 
 interface Props {
   request: ApprovalRequest | null;
+  requesterName?: string;
+  tenantName?: string;
   canDecide: boolean;
   onOpenChange: (open: boolean) => void;
   onDecide: (request: ApprovalRequest, approve: boolean) => void;
@@ -26,7 +28,7 @@ function payloadItems(payload: Record<string, unknown>): KvItem[] {
 }
 
 /** The full request beside the ledger, with what it would do if approved. */
-export function ApprovalSheet({ request, canDecide, onOpenChange, onDecide }: Props) {
+export function ApprovalSheet({ request, requesterName, tenantName, canDecide, onOpenChange, onDecide }: Props) {
   const payload = request ? parseApprovalPayload(request.rawPayloadJson) : null;
   const waiting = /pend|await|request|open/i.test(request?.status ?? "");
 
@@ -35,7 +37,7 @@ export function ApprovalSheet({ request, canDecide, onOpenChange, onDecide }: Pr
       open={request !== null}
       onOpenChange={onOpenChange}
       title={request ? humanize(request.actionKey ?? "Request") : "Request"}
-      description={request?.requestedBy ? `Asked by ${request.requestedBy}` : undefined}
+      description={request?.requestedBy ? `Asked by ${requesterName ?? request.requestedBy}` : undefined}
       footer={
         request &&
         canDecide &&
@@ -79,7 +81,17 @@ export function ApprovalSheet({ request, canDecide, onOpenChange, onDecide }: Pr
 
           <section>
             <h3 className="mb-1 text-sm font-medium">Everything on this request</h3>
-            <KeyValueList items={recordToItems(request).filter((i) => i.label !== "Raw Payload Json")} />
+            <KeyValueList
+              items={recordToItems(request)
+                .filter((i) => i.label !== "Raw Payload Json")
+                .map((item) =>
+                  item.label === "Requested By"
+                    ? { ...item, value: requesterName ?? item.value }
+                    : item.label === "Tenant Id"
+                      ? { label: "Tenant", value: tenantName ?? item.value }
+                      : item,
+                )}
+            />
           </section>
         </div>
       )}

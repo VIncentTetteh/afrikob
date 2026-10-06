@@ -6,13 +6,12 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { CreateTenantSheet } from "@/components/admin/create-tenant-dialog";
 import { PageHeader } from "@/components/domain/page-header";
-import { Ref } from "@/components/domain/feedback";
 import { Ledger } from "@/components/ledger/ledger";
 import { Button } from "@/components/ui/button";
 import { State } from "@/components/ui/state";
 import { useTenants } from "@/lib/api/hooks";
 import type { Tenant } from "@/lib/api/schemas/models";
-import { display, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 
 export default function TenantsPage() {
   const tenants = useTenants();
@@ -34,7 +33,6 @@ export default function TenantsPage() {
       },
       { id: "status", header: "State", accessorFn: (t) => t.status ?? "", cell: ({ row }) => <State status={row.original.status ?? "Active"} /> },
       { id: "createdAt", header: "Onboarded", accessorFn: (t) => t.createdAt ?? "", cell: ({ row }) => formatDate(row.original.createdAt) },
-      { id: "id", header: "Tenant ID", accessorFn: (t) => t.id, cell: ({ getValue }) => <Ref>{display(getValue())}</Ref> },
     ],
     [],
   );

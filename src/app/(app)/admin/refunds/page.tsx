@@ -14,7 +14,8 @@ import { Field, Input, Textarea } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { State } from "@/components/ui/state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useAdminRefunds, useRefundDecision } from "@/lib/api/hooks";
+import { useAdminRefunds, usePortalUsers, useRefundDecision, useTenants } from "@/lib/api/hooks";
+import { personLabel, tenantLabel } from "@/lib/api/references";
 import type { Refund } from "@/lib/api/schemas/models";
 import { completeRefundSchema, rejectRefundSchema } from "@/lib/api/schemas/requests";
 import { useSession } from "@/lib/api/session";
@@ -42,6 +43,8 @@ type Action = { kind: "view" | "approve" | "reject" | "complete"; refund: Refund
 export default function AdminRefundsPage() {
   const [status, setStatus] = useState("");
   const refunds = useAdminRefunds();
+  const tenants = useTenants();
+  const people = usePortalUsers();
   const tab = STATUS_TABS.find((t) => t.value === status);
   const rows = useMemo(
     () => (tab?.match ? (refunds.data ?? []).filter((r) => tab.match?.test(r.status ?? "")) : (refunds.data ?? [])),
@@ -67,9 +70,24 @@ export default function AdminRefundsPage() {
         accessorFn: (r) => r.reason ?? "",
         cell: ({ getValue }) => <span className="block max-w-56 truncate">{display(getValue())}</span>,
       },
-      { id: "requestedBy", header: "Asked by", accessorFn: (r) => r.requestedBy ?? "", cell: ({ getValue }) => display(getValue()) },
-      { id: "approvedBy", header: "Approved by", accessorFn: (r) => r.approvedBy ?? "", cell: ({ getValue }) => display(getValue()) },
-      { id: "tenantId", header: "Tenant", accessorFn: (r) => r.tenantId ?? "", cell: ({ getValue }) => <Ref>{display(getValue())}</Ref> },
+      {
+        id: "requestedBy",
+        header: "Asked by",
+        accessorFn: (r) => `${personLabel(r.requestedBy, people.data ?? [])} ${r.requestedBy ?? ""}`,
+        cell: ({ row }) => personLabel(row.original.requestedBy, people.data ?? []),
+      },
+      {
+        id: "approvedBy",
+        header: "Approved by",
+        accessorFn: (r) => `${personLabel(r.approvedBy, people.data ?? [])} ${r.approvedBy ?? ""}`,
+        cell: ({ row }) => personLabel(row.original.approvedBy, people.data ?? []),
+      },
+      {
+        id: "tenantId",
+        header: "Tenant",
+        accessorFn: (r) => `${tenantLabel(r.tenantId, tenants.data ?? [])} ${r.tenantId ?? ""}`,
+        cell: ({ row }) => tenantLabel(row.original.tenantId, tenants.data ?? []),
+      },
       {
         id: "transactionId",
         header: "Transaction",
@@ -117,7 +135,7 @@ export default function AdminRefundsPage() {
         },
       },
     ],
-    [canCheck],
+    [canCheck, people.data, tenants.data],
   );
 
   const close = () => setAction(null);
@@ -162,7 +180,18 @@ export default function AdminRefundsPage() {
         title={action ? formatMoney(action.refund.amount, action.refund.currency) : "Refund"}
         description={action?.refund.reason ?? undefined}
       >
-        {action && <KeyValueList items={recordToItems(action.refund)} />}
+        {action && (
+          <KeyValueList
+            items={recordToItems(action.refund).map((item) => {
+              if (item.label === "Tenant Id") return { label: "Tenant", value: tenantLabel(action.refund.tenantId, tenants.data ?? []) };
+              if (item.label === "Requested By") return { ...item, value: personLabel(action.refund.requestedBy, people.data ?? []) };
+              if (item.label === "Approved By") return { ...item, value: personLabel(action.refund.approvedBy, people.data ?? []) };
+              if (item.label === "Rejected By") return { ...item, value: personLabel(action.refund.rejectedBy, people.data ?? []) };
+              if (item.label === "Completed By") return { ...item, value: personLabel(action.refund.completedBy, people.data ?? []) };
+              return item;
+            })}
+          />
+        )}
       </Sheet>
       <ApproveDialog action={action} onClose={close} />
       <RejectDialog action={action} onClose={close} />

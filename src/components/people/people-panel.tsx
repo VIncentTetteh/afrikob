@@ -17,6 +17,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { State } from "@/components/ui/state";
 import { usePortalUser, usePortalUsers, useTenantAdminUsers, useTenantAdminUserMutations, useTenants, useUserMutations } from "@/lib/api/hooks";
 import type { PortalUser } from "@/lib/api/schemas/models";
+import { tenantLabel } from "@/lib/api/references";
 import {
   adminSetPasswordSchema,
   createPortalUserSchema,
@@ -169,22 +170,12 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
     ];
 
     if (isPlatform) {
-      base.splice(
-        1,
-        0,
-        {
-          id: "userType",
-          header: "Belongs to",
-          accessorFn: (u) => u.userType ?? "",
-          cell: ({ getValue }) => (getValue() === "Platform" ? "Afrikob" : display(getValue())),
-        },
-        {
-          id: "tenantId",
-          header: "Tenant",
-          accessorFn: (u) => u.tenantId ?? "",
-          cell: ({ getValue }) => display(getValue() || "Platform"),
-        },
-      );
+      base.splice(1, 0, {
+        id: "tenantId",
+        header: "Belongs to",
+        accessorFn: (u) => `${tenantLabel(u.tenantId, tenants.data ?? [])} ${u.tenantId ?? "platform"}`,
+        cell: ({ row }) => tenantLabel(row.original.tenantId, tenants.data ?? []),
+      });
     }
 
     base.push({
@@ -222,7 +213,7 @@ export function PeoplePanel({ scope, tenantId, showHeading = true }: Props) {
       ),
     });
     return base;
-  }, [activate, isPlatform]);
+  }, [activate, isPlatform, tenants.data]);
 
   const channelField = (form: { register: (name: "preferredNotificationChannel") => object }, id: string) => (
     <Field label="Notify by" htmlFor={id}>

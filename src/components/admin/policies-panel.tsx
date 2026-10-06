@@ -14,8 +14,8 @@ import { Checkbox, Field, Input, Select } from "@/components/ui/input";
 import { State } from "@/components/ui/state";
 import { useApprovalPolicies, usePolicyMutations, useTenants } from "@/lib/api/hooks";
 import type { ApprovalPolicy } from "@/lib/api/schemas/models";
+import { tenantLabel } from "@/lib/api/references";
 import { upsertApprovalPolicySchema, type UpsertApprovalPolicy, type UpsertApprovalPolicyInput } from "@/lib/api/schemas/requests";
-import { display } from "@/lib/format";
 
 const SUGGESTED_ACTIONS = ["DISBURSEMENT", "BULK_DISBURSEMENT", "REFUND", "WALLET_TOPUP", "FEE_CHANGE"];
 
@@ -32,7 +32,13 @@ export function PoliciesPanel({ tenantId, showHeader = true }: { tenantId?: stri
   const columns = useMemo<ColumnDef<ApprovalPolicy, unknown>[]>(
     () => [
       { id: "actionKey", header: "Action", accessorFn: (p) => p.actionKey ?? "", cell: ({ getValue }) => <span className="text-sm">{String(getValue() ?? "")}</span> },
-      { id: "tenantId", header: "Scope", accessorFn: (p) => p.tenantId ?? "", cell: ({ row }) => display(row.original.tenantId ?? "Global") },
+      {
+        id: "tenantId",
+        header: "Scope",
+        accessorFn: (p) => `${p.tenantId ? (tenantId ? "This tenant" : tenantLabel(p.tenantId, tenants.data ?? [])) : "Every tenant"} ${p.tenantId ?? ""}`,
+        cell: ({ row }) =>
+          row.original.tenantId ? (tenantId ? "This tenant" : tenantLabel(row.original.tenantId, tenants.data ?? [])) : "Every tenant",
+      },
       { id: "isEnabled", header: "Status", accessorFn: (p) => (p.isEnabled ? "enabled" : "disabled"), cell: ({ row }) => <State status={row.original.isEnabled ? "Active" : "Off"} /> },
       { id: "requiredApprovals", header: "Approvals needed", accessorFn: (p) => p.requiredApprovals ?? 1 },
       { id: "allowRequesterToApprove", header: "Can self-approve", accessorFn: (p) => (p.allowRequesterToApprove ? "Yes" : "No") },
@@ -49,7 +55,7 @@ export function PoliciesPanel({ tenantId, showHeader = true }: { tenantId?: stri
         ),
       },
     ],
-    [],
+    [tenantId, tenants.data],
   );
 
   const submit = form.handleSubmit((body) =>

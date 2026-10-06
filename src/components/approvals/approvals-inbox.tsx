@@ -13,7 +13,8 @@ import { DropdownContent, DropdownItem, DropdownMenu, DropdownTrigger } from "@/
 import { State } from "@/components/ui/state";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ApprovalScope } from "@/lib/api/endpoints";
-import { useApprovals } from "@/lib/api/hooks";
+import { useApprovals, usePortalUsers, useTenantAdminUsers, useTenants } from "@/lib/api/hooks";
+import { personLabel, tenantLabel } from "@/lib/api/references";
 import type { ApprovalRequest } from "@/lib/api/schemas/models";
 import { useSession } from "@/lib/api/session";
 import { display, formatDate, humanize } from "@/lib/format";
@@ -44,6 +45,10 @@ interface Props {
 export function ApprovalsInbox({ scope, description, tenantId }: Props) {
   const [status, setStatus] = useState("");
   const approvals = useApprovals(scope, status || undefined);
+  const tenants = useTenants(scope === "platform");
+  const platformPeople = usePortalUsers(undefined, undefined, scope === "platform");
+  const tenantPeople = useTenantAdminUsers(scope === "tenant-admin");
+  const people = scope === "platform" ? platformPeople : tenantPeople;
   const { data: session } = useSession();
   const [viewing, setViewing] = useState<ApprovalRequest | null>(null);
   const [decision, setDecision] = useState<Decision>(null);
@@ -63,7 +68,12 @@ export function ApprovalsInbox({ scope, description, tenantId }: Props) {
         cell: ({ row }) => <span className="font-medium">{humanize(row.original.actionKey ?? "Unknown")}</span>,
       },
       { id: "status", header: "State", accessorFn: (a) => a.status ?? "", cell: ({ row }) => <State status={row.original.status} /> },
-      { id: "requestedBy", header: "Asked by", accessorFn: (a) => a.requestedBy ?? "", cell: ({ getValue }) => display(getValue()) },
+      {
+        id: "requestedBy",
+        header: "Asked by",
+        accessorFn: (a) => `${personLabel(a.requestedBy, people.data ?? [])} ${a.requestedBy ?? ""}`,
+        cell: ({ row }) => personLabel(row.original.requestedBy, people.data ?? []),
+      },
       {
         id: "requiredApprovals",
         header: "Approvals needed",
@@ -72,7 +82,12 @@ export function ApprovalsInbox({ scope, description, tenantId }: Props) {
       },
       { id: "resourceType", header: "About", accessorFn: (a) => a.resourceType ?? "", cell: ({ getValue }) => humanize(String(getValue() ?? "")) || "N/A" },
       { id: "decidedSummary", header: "Outcome", accessorFn: (a) => a.decidedSummary ?? "", cell: ({ getValue }) => display(getValue()) },
-      { id: "tenantId", header: "Tenant", accessorFn: (a) => a.tenantId ?? "", cell: ({ getValue }) => <Ref>{display(getValue())}</Ref> },
+      {
+        id: "tenantId",
+        header: "Tenant",
+        accessorFn: (a) => `${scope === "platform" ? tenantLabel(a.tenantId, tenants.data ?? []) : "Your organisation"} ${a.tenantId ?? ""}`,
+        cell: ({ row }) => (scope === "platform" ? tenantLabel(row.original.tenantId, tenants.data ?? []) : "Your organisation"),
+      },
       { id: "id", header: "Request ID", accessorFn: (a) => a.id, cell: ({ getValue }) => <Ref>{display(getValue())}</Ref> },
       {
         id: "actions",
@@ -111,7 +126,7 @@ export function ApprovalsInbox({ scope, description, tenantId }: Props) {
         },
       },
     ],
-    [canDecide],
+    [canDecide, people.data, scope, tenants.data],
   );
 
   return (
@@ -150,6 +165,8 @@ export function ApprovalsInbox({ scope, description, tenantId }: Props) {
 
       <ApprovalSheet
         request={viewing}
+        requesterName={viewing ? personLabel(viewing.requestedBy, people.data ?? []) : undefined}
+        tenantName={viewing ? (scope === "platform" ? tenantLabel(viewing.tenantId, tenants.data ?? []) : "Your organisation") : undefined}
         canDecide={canDecide}
         onOpenChange={(open) => !open && setViewing(null)}
         onDecide={(request, approve) => {
