@@ -48,8 +48,11 @@ export function Providers({ children }: { children: ReactNode }) {
           mutations: { retry: false },
         },
         queryCache: new QueryCache({
-          onError: (error) => {
+          onError: (error, query) => {
             if (error instanceof ApiError && error.isUnauthorized) return;
+            // Some detail reads are optional enrichments because their list row
+            // already contains everything needed to render a usable record.
+            if (query.meta?.suppressGlobalError) return;
             toast.error(errorMessage(error), { id: errorMessage(error) });
           },
         }),

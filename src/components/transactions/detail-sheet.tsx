@@ -4,7 +4,6 @@ import { RotateCcw } from "lucide-react";
 import { KeyValueList, recordToItems, type KvItem } from "@/components/domain/key-value-list";
 import { CopyButton } from "@/components/domain/feedback";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/panel";
 import { Sheet } from "@/components/ui/sheet";
 import { State } from "@/components/ui/state";
 import { TENANT_REFUNDS_AVAILABLE } from "@/lib/api/features";
@@ -29,7 +28,7 @@ function summary(t: Transaction): KvItem[] {
   ];
 }
 
-const SUMMARY_KEYS = new Set(["status", "fee", "netAmount", "refundedAmount", "createdAt", "completedAt", "amount", "currency"]);
+const SUMMARY_KEYS = new Set(["status", "fee", "netamount", "refundedamount", "createdat", "completedat", "amount", "currency"]);
 
 /** Opens beside the ledger so the operator keeps their place. */
 export function TransactionSheet({ transaction, onOpenChange, onRefund }: Props) {
@@ -62,17 +61,13 @@ export function TransactionSheet({ transaction, onOpenChange, onRefund }: Props)
           <KeyValueList items={summary(tx)} />
           <section>
             <h3 className="mb-1 text-sm font-medium">Everything on this record</h3>
-            {detail.isLoading ? (
-              <Skeleton className="h-40 w-full" />
-            ) : (
-              <KeyValueList items={recordToItems(tx).filter((i) => !SUMMARY_KEYS.has(i.label.replaceAll(" ", "")))} />
-            )}
+            <KeyValueList items={recordToItems(tx).filter((i) => !SUMMARY_KEYS.has(i.label.replaceAll(" ", "").toLowerCase()))} />
           </section>
           {TENANT_REFUNDS_AVAILABLE && (
             <section>
               <h3 className="mb-1 text-sm font-medium">Refunds</h3>
               {refunds.isLoading ? (
-                <Skeleton className="h-10 w-full" />
+                <p className="text-sm text-ink-soft">Loading refunds…</p>
               ) : refunds.data && refunds.data.length > 0 ? (
                 <ul className="divide-y divide-line">
                   {refunds.data.map((r) => (

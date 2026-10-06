@@ -12,6 +12,9 @@ const TONES = {
 /** How a money movement ended, in the gateway's own words, with everything it returned. */
 export function ResultPanel({ outcome }: { outcome: Outcome<Record<string, unknown>> }) {
   const tone = TONES[outcome.tone];
+  const returnedValues = outcome.data
+    ? Object.fromEntries(Object.entries(outcome.data).filter(([, value]) => value !== null && value !== undefined && value !== ""))
+    : null;
   return (
     <div className="space-y-4">
       <div role={outcome.tone === "failed" ? "alert" : "status"} className={cn("rounded-lg border px-3 py-2.5 text-sm", tone.className)}>
@@ -24,7 +27,7 @@ export function ResultPanel({ outcome }: { outcome: Outcome<Record<string, unkno
           <p className="mt-1 pl-6 text-ink-soft">Use Status check with your reference to follow it.</p>
         )}
       </div>
-      {outcome.data && <KeyValueList items={recordToItems(outcome.data)} />}
+      {returnedValues && Object.keys(returnedValues).length > 0 && <KeyValueList items={recordToItems(returnedValues)} />}
     </div>
   );
 }

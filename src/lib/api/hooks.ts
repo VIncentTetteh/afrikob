@@ -72,6 +72,9 @@ export const useTransaction = (id: string | null) =>
     queryKey: qk.transactions.detail(id ?? ""),
     queryFn: ({ signal }) => transactionsApi.get(id ?? "", signal),
     enabled: Boolean(id),
+    // The ledger row is a complete fallback. A missing upstream detail record
+    // must not show a misleading global error while that row is open.
+    meta: { suppressGlobalError: true },
   });
 
 export const useTransactionRefunds = (txId: string | null) =>

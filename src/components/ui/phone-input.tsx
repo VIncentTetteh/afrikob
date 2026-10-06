@@ -2,7 +2,7 @@
 
 import { AsYouType, getCountries, getCountryCallingCode, parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { DEFAULT_COUNTRY } from "@/lib/validation/fields";
 
@@ -55,13 +55,16 @@ export function PhoneInput({ id, value, onChange, onBlur, countries, invalid, di
   const [country, setCountry] = useState<CountryCode>(() => split(value ?? "", fallback).country);
   const [national, setNational] = useState(() => split(value ?? "", fallback).national);
 
-  // A reset from the form (value cleared or replaced) wins over local typing.
   const external = value ?? "";
-  if (external !== join(country, national) && !(external === "" && national === "")) {
+  // A reset from the form (value cleared or replaced) wins over local typing.
+  // Synchronise after render: setting state while rendering can produce loops
+  // when react-hook-form resets several fields at once.
+  useEffect(() => {
+    if (external === join(country, national) || (external === "" && national === "")) return;
     const next = split(external, fallback);
-    if (next.country !== country) setCountry(next.country);
-    if (next.national !== national) setNational(next.national);
-  }
+    setCountry(next.country);
+    setNational(next.national);
+  }, [country, external, fallback, national]);
 
   const describedBy = invalid ? `${id}-error` : `${id}-hint`;
   const locked = options.length === 1;

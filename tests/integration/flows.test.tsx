@@ -132,6 +132,8 @@ describe("Ledger", () => {
     await user.click(rows[0]);
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByText("GHS 25.50")).toBeInTheDocument();
+    expect(within(sheet).queryByText(/^Amount$/)).not.toBeInTheDocument();
+    expect(within(sheet).queryByText(/^Currency$/)).not.toBeInTheDocument();
     // The gateway has no tenant/ refunds yet, so the sheet neither asks nor offers.
     expect(within(sheet).queryByRole("heading", { name: "Refunds" })).not.toBeInTheDocument();
   });
@@ -191,6 +193,7 @@ describe("Disbursements", () => {
     const sheet = await screen.findByRole("dialog");
     expect(await within(sheet).findByText("Disbursement failed")).toBeInTheDocument();
     expect(within(sheet).getByRole("alert")).toHaveTextContent("Account closed");
+    expect(within(sheet).queryByText("N/A")).not.toBeInTheDocument();
   });
 
   it("pays a mobile wallet in national form, and refuses more than the balance", async () => {
